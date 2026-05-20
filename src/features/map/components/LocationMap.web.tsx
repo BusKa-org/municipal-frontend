@@ -8,7 +8,7 @@ import type { LocationMapProps } from '../types';
 import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
 import { MAP_STYLE_URL } from '../utils/mapStyle';
 
-export default function LocationMap({ pontosRota }: LocationMapProps) {
+export default function LocationMap({ pontosRota, style }: LocationMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const destMarkerRef = useRef<Marker | null>(null);
@@ -73,7 +73,7 @@ export default function LocationMap({ pontosRota }: LocationMapProps) {
   }, [mapReady, destinationLatLng]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <div ref={containerRef} style={styles.map as React.CSSProperties} />
       {!mapReady && (
         <View pointerEvents="none" style={styles.loadingOverlay}>

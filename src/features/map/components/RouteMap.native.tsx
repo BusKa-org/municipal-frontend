@@ -27,7 +27,7 @@ function toLngLat(coord: LatLng): [number, number] {
   return [coord.longitude, coord.latitude];
 }
 
-export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) {
+export default function RouteMap({ pontosRota, onPontoChegado, style }: RouteMapProps) {
   const cameraRef = useRef<MapLibreGL.Camera | null>(null);
   const hasFittedRef = useRef(false);
 
@@ -121,17 +121,31 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     hasFittedRef.current = true;
   }, [mapReady, userLocation, destinationLatLng, routeCoordinates, destinoAtual]);
 
+  // Coordenadas usadas pra desenhar a polyline. Se o backend retornar a rota,
+  // usamos ela. Senão (erro 5xx do /routing/route por OSRM fora do ar, etc),
+  // caímos pra uma linha reta entre origem e destino — melhor que não mostrar
+  // nada.
+  const polylineCoordinates = useMemo<LatLng[]>(() => {
+    if (routeCoordinates.length >= 2) return routeCoordinates;
+    if (userLocation && destinationLatLng) {
+      return [userLocation, destinationLatLng];
+    }
+    return [];
+  }, [routeCoordinates, userLocation, destinationLatLng]);
+
+  const isRouteFallback = routeCoordinates.length < 2 && polylineCoordinates.length >= 2;
+
   const routeGeoJson = useMemo(() => {
-    if (routeCoordinates.length < 2) return null;
+    if (polylineCoordinates.length < 2) return null;
     return {
       type: 'Feature' as const,
       geometry: {
         type: 'LineString' as const,
-        coordinates: routeCoordinates.map(toLngLat),
+        coordinates: polylineCoordinates.map(toLngLat),
       },
       properties: {},
     };
-  }, [routeCoordinates]);
+  }, [polylineCoordinates]);
 
   const handleMapReady = useCallback(() => {
     setMapReady(true);
@@ -150,13 +164,17 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     await requestPermission();
   }, [requestPermission, resetLocation, resetRoute]);
 
+  // Só consideramos "erro fatal" coisas que impedem o mapa de funcionar:
+  // mapError (mapa não carregou), permissionError (sem GPS), locationError
+  // (não obteve a localização). O routeError NÃO é fatal — caímos pra linha
+  // reta entre origem e destino e o mapa continua funcionando.
   const overlayError =
-    mapError ? 'Verifique sua conexão com a internet' : permissionError || locationError || routeError;
+    mapError ? 'Verifique sua conexão com a internet' : permissionError || locationError;
 
-  const overlayLoading = !mapReady || permissionLoading || locationLoading || routeLoading;
+  const overlayLoading = !mapReady || permissionLoading || locationLoading;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <MapLibreGL.MapView
         style={[styles.map, mapError && styles.hidden]}
         mapStyle={MAP_STYLE_JSON}
@@ -200,10 +218,13 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
               id="routeLine"
               style={{
                 lineColor: '#007bff',
-                lineWidth: 6,
-                lineOpacity: 0.85,
+                lineWidth: isRouteFallback ? 4 : 6,
+                lineOpacity: isRouteFallback ? 0.5 : 0.85,
                 lineCap: 'round',
                 lineJoin: 'round',
+                // Quando estamos no fallback (sem dados do OSRM), desenhamos
+                // tracejado pra indicar que é uma aproximação.
+                lineDasharray: isRouteFallback ? [2, 1] : [1, 0],
               }}
             />
           </MapLibreGL.ShapeSource>

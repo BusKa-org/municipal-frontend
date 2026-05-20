@@ -13,7 +13,7 @@ import { MAP_STYLE_URL } from '../utils/mapStyle';
 const ROUTE_SOURCE_ID = 'route-source';
 const ROUTE_LAYER_ID = 'route-layer';
 
-export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) {
+export default function RouteMap({ pontosRota, onPontoChegado, style }: RouteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const userMarkerRef = useRef<Marker | null>(null);
@@ -174,7 +174,8 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     }
   }, [mapReady, userLocation]);
 
-  // Route polyline
+  // Route polyline — usa rota calculada se disponível, senão linha reta
+  // entre origem e destino como fallback (quando o OSRM falha).
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const source = mapRef.current.getSource(ROUTE_SOURCE_ID) as
@@ -182,17 +183,42 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
       | undefined;
     if (!source) return;
 
-    const coordinates =
-      routeCoordinates.length >= 2
-        ? routeCoordinates.map((c) => [c.longitude, c.latitude])
-        : [];
+    let coordinates: number[][] = [];
+    let isFallback = false;
+    if (routeCoordinates.length >= 2) {
+      coordinates = routeCoordinates.map((c) => [c.longitude, c.latitude]);
+    } else if (userLocation && destinationLatLng) {
+      coordinates = [
+        [userLocation.longitude, userLocation.latitude],
+        [destinationLatLng.longitude, destinationLatLng.latitude],
+      ];
+      isFallback = true;
+    }
+
+    if (mapRef.current.getLayer(ROUTE_LAYER_ID)) {
+      mapRef.current.setPaintProperty(
+        ROUTE_LAYER_ID,
+        'line-dasharray',
+        isFallback ? [2, 1] : [1, 0],
+      );
+      mapRef.current.setPaintProperty(
+        ROUTE_LAYER_ID,
+        'line-opacity',
+        isFallback ? 0.5 : 0.85,
+      );
+      mapRef.current.setPaintProperty(
+        ROUTE_LAYER_ID,
+        'line-width',
+        isFallback ? 4 : 6,
+      );
+    }
 
     source.setData({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates },
       properties: {},
     });
-  }, [mapReady, routeCoordinates]);
+  }, [mapReady, routeCoordinates, userLocation, destinationLatLng]);
 
   // Fit bounds (once per destination)
   useEffect(() => {
@@ -223,7 +249,15 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     hasFittedRef.current = false;
   }, [destinoAtual?.id]);
 
-  return <div ref={containerRef} style={styles.container as React.CSSProperties} />;
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        ...(styles.container as React.CSSProperties),
+        ...((style as React.CSSProperties) || {}),
+      }}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

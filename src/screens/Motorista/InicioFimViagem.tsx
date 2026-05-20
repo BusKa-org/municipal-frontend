@@ -287,6 +287,7 @@ const InicioFimViagem: React.FC<Props> = ({ navigation, route }) => {
         {/* Full-screen live map */}
         <RouteMap
           pontosRota={pontosRota}
+          style={styles.mapFullScreen}
           onPontoChegado={() => {
             // advance through stops as driver arrives
             setPontosRota((prev) => prev.slice(1));
@@ -610,6 +611,9 @@ const styles = StyleSheet.create({
 
   // ── Map (active trip) layout ───────────────────────────────────────────
   mapScreen: { flex: 1, backgroundColor: '#000' },
+  // Sobrescreve a altura fixa de 400 do RouteMap default, ocupando todo o
+  // mapScreen (que já está com flex:1).
+  mapFullScreen: { flex: 1, height: undefined, borderRadius: 0 },
 
   floatingTop: {
     position: 'absolute',

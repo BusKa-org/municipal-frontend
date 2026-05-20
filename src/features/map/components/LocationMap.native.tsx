@@ -10,7 +10,7 @@ MapLibreGL.setAccessToken(null);
 
 const DEFAULT_CENTER: [number, number] = [-46.63, -23.55];
 
-export default function LocationMap({ pontosRota }: LocationMapProps) {
+export default function LocationMap({ pontosRota, style }: LocationMapProps) {
   const cameraRef = useRef<MapLibreGL.Camera | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
@@ -54,7 +54,7 @@ export default function LocationMap({ pontosRota }: LocationMapProps) {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <MapLibreGL.MapView
         style={[styles.map, mapError && styles.hidden]}
         mapStyle={MAP_STYLE_JSON}
