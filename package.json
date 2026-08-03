@@ -17,7 +17,7 @@
     "lint": "eslint .",
     "pretypecheck": "npm run api:generate",
     "typecheck": "tsc --noEmit",
-    "api:generate": "swagger2openapi ../buska-backend/docs/openapi.json -o ../buska-backend/docs/openapi3.json && openapi-typescript ../buska-backend/docs/openapi3.json --output src/types/openapi.ts"
+    "api:generate": "swagger2openapi ../municipal-backend/docs/openapi.json -o ../municipal-backend/docs/openapi3.json && openapi-typescript ../municipal-backend/docs/openapi3.json --output src/types/openapi.ts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
