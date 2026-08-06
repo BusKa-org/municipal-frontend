@@ -1,25 +1,24 @@
+// src/features/map/components/RouteMap.web.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
-import type * as LeafletNS from 'leaflet';
+import maplibregl, { LngLatBoundsLike, Map as MapLibreMap, Marker } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { LatLng, RouteMapProps } from '../types';
 import { useRoutePolyline } from '../hooks/useRoutePolyline';
 import { useArrivalDetection } from '../hooks/useArrivalDetection';
 import { normalizeRoutePoints, pointToLatLng, buildFitCoordinates } from '../utils/points';
+import { MAP_STYLE_URL } from '../utils/mapStyle';
 
-type LeafletModule = typeof LeafletNS;
-type LeafletMap = LeafletNS.Map;
-type LeafletMarker = LeafletNS.Marker;
-type LeafletPolyline = LeafletNS.Polyline;
+const ROUTE_SOURCE_ID = 'route-source';
+const ROUTE_LAYER_ID = 'route-layer';
 
-export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) {
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstance = useRef<LeafletMap | null>(null);
-  const LRef = useRef<LeafletModule | null>(null);
+export default function RouteMap({ pontosRota, onPontoChegado, style }: RouteMapProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const userMarkerRef = useRef<Marker | null>(null);
+  const destMarkerRef = useRef<Marker | null>(null);
   const watchIdRef = useRef<number | null>(null);
-  const userMarkerRef = useRef<LeafletMarker | null>(null);
-  const destMarkerRef = useRef<LeafletMarker | null>(null);
-  const routeLineRef = useRef<LeafletPolyline | null>(null);
   const hasFittedRef = useRef(false);
 
   const [mapReady, setMapReady] = useState(false);
@@ -50,51 +49,69 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     },
   });
 
-  // ─── Map initialisation ───────────────────────────────────────────────────
-
+  // Init map
   useEffect(() => {
-    let mounted = true;
+    if (!containerRef.current || mapRef.current) return;
 
-    const initMap = async () => {
-      if (mapInstance.current || !mapRef.current) return;
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: MAP_STYLE_URL,
+      center: [-46.63, -23.55],
+      zoom: 12,
+      attributionControl: { compact: true },
+    });
 
-      const leafletModule = await import('leaflet');
-      const L = (leafletModule.default ?? leafletModule) as LeafletModule;
-      LRef.current = L;
-
-      if (!mounted || !mapRef.current) return;
-
-      const map = L.map(mapRef.current).setView([-23.55, -46.63], 13);
-
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-      }).addTo(map);
-
-      mapInstance.current = map;
+    map.on('load', () => {
+      // Source + layer pra rota (criados vazios; depois atualizamos a data)
+      map.addSource(ROUTE_SOURCE_ID, {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: [] },
+          properties: {},
+        },
+      });
+      map.addLayer({
+        id: ROUTE_LAYER_ID,
+        type: 'line',
+        source: ROUTE_SOURCE_ID,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#007bff',
+          'line-width': 6,
+          'line-opacity': 0.85,
+        },
+      });
       setMapReady(true);
-    };
+    });
 
-    initMap().catch((err) => console.error('Erro Leaflet:', err));
+    mapRef.current = map;
 
     return () => {
-      mounted = false;
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-        mapInstance.current = null;
+      if (userMarkerRef.current) {
+        userMarkerRef.current.remove();
+        userMarkerRef.current = null;
       }
+      if (destMarkerRef.current) {
+        destMarkerRef.current.remove();
+        destMarkerRef.current = null;
+      }
+      map.remove();
+      mapRef.current = null;
     };
   }, []);
 
-  // ─── Geolocation watch (browser API — react-native-geolocation-service is native-only) ───
-
+  // Geolocation watch
   useEffect(() => {
     if (!mapReady) return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        setUserLocation({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
       },
       (err) => console.warn('Geolocation error:', err),
       { enableHighAccuracy: true },
@@ -108,86 +125,106 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     };
   }, [mapReady]);
 
-  // ─── User marker ──────────────────────────────────────────────────────────
-
+  // Destination marker
   useEffect(() => {
-    if (!mapReady || !mapInstance.current || !LRef.current) return;
-    const map = mapInstance.current;
-    const L = LRef.current;
-
-    if (!userLocation) {
-      if (userMarkerRef.current) {
-        map.removeLayer(userMarkerRef.current);
-        userMarkerRef.current = null;
-      }
-      return;
-    }
-
-    const latLng = L.latLng(userLocation.latitude, userLocation.longitude);
-
-    if (userMarkerRef.current) {
-      userMarkerRef.current.setLatLng(latLng);
-    } else {
-      const icon = L.divIcon({
-        className: 'motorista-icon',
-        html: '<div style="width:16px;height:16px;background:#2196F3;border:3px solid white;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>',
-      });
-      userMarkerRef.current = L.marker(latLng, { icon, zIndexOffset: 1000 }).addTo(map);
-    }
-  }, [mapReady, userLocation]);
-
-  // ─── Destination marker ───────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!mapReady || !mapInstance.current || !LRef.current) return;
-    const map = mapInstance.current;
-    const L = LRef.current;
+    if (!mapReady || !mapRef.current) return;
 
     if (!destinationLatLng) {
-      if (destMarkerRef.current) {
-        map.removeLayer(destMarkerRef.current);
-        destMarkerRef.current = null;
-      }
-      hasFittedRef.current = false;
+      destMarkerRef.current?.remove();
+      destMarkerRef.current = null;
       return;
     }
 
-    const latLng = L.latLng(destinationLatLng.latitude, destinationLatLng.longitude);
-
     if (destMarkerRef.current) {
-      destMarkerRef.current.setLatLng(latLng);
+      destMarkerRef.current.setLngLat([
+        destinationLatLng.longitude,
+        destinationLatLng.latitude,
+      ]);
     } else {
-      destMarkerRef.current = L.marker(latLng).addTo(map);
+      destMarkerRef.current = new maplibregl.Marker({ color: '#EA4335' })
+        .setLngLat([destinationLatLng.longitude, destinationLatLng.latitude])
+        .addTo(mapRef.current);
     }
   }, [mapReady, destinationLatLng]);
 
-  // ─── Route polyline ───────────────────────────────────────────────────────
-
+  // User marker (custom DOM element)
   useEffect(() => {
-    if (!mapReady || !mapInstance.current || !LRef.current) return;
-    const map = mapInstance.current;
-    const L = LRef.current;
+    if (!mapReady || !mapRef.current) return;
 
-    if (routeLineRef.current) {
-      map.removeLayer(routeLineRef.current);
-      routeLineRef.current = null;
+    if (!userLocation) {
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+      return;
     }
 
-    if (routeCoordinates.length < 2) return;
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setLngLat([userLocation.longitude, userLocation.latitude]);
+    } else {
+      const el = document.createElement('div');
+      el.style.width = '16px';
+      el.style.height = '16px';
+      el.style.borderRadius = '50%';
+      el.style.background = '#2196F3';
+      el.style.border = '3px solid #fff';
+      el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
 
-    routeLineRef.current = L.polyline(
-      routeCoordinates.map((c) => L.latLng(c.latitude, c.longitude)),
-      { color: '#007bff', weight: 6, opacity: 0.8 },
-    ).addTo(map);
-  }, [mapReady, routeCoordinates]);
+      userMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat([userLocation.longitude, userLocation.latitude])
+        .addTo(mapRef.current);
+    }
+  }, [mapReady, userLocation]);
 
-  // ─── Fit bounds (once per destination) ───────────────────────────────────
-
+  // Route polyline — usa rota calculada se disponível, senão linha reta
+  // entre origem e destino como fallback (quando o OSRM falha).
   useEffect(() => {
-    if (!mapReady || !mapInstance.current || !LRef.current) return;
+    if (!mapReady || !mapRef.current) return;
+    const source = mapRef.current.getSource(ROUTE_SOURCE_ID) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (!source) return;
+
+    let coordinates: number[][] = [];
+    let isFallback = false;
+    if (routeCoordinates.length >= 2) {
+      coordinates = routeCoordinates.map((c) => [c.longitude, c.latitude]);
+    } else if (userLocation && destinationLatLng) {
+      coordinates = [
+        [userLocation.longitude, userLocation.latitude],
+        [destinationLatLng.longitude, destinationLatLng.latitude],
+      ];
+      isFallback = true;
+    }
+
+    if (mapRef.current.getLayer(ROUTE_LAYER_ID)) {
+      mapRef.current.setPaintProperty(
+        ROUTE_LAYER_ID,
+        'line-dasharray',
+        isFallback ? [2, 1] : [1, 0],
+      );
+      mapRef.current.setPaintProperty(
+        ROUTE_LAYER_ID,
+        'line-opacity',
+        isFallback ? 0.5 : 0.85,
+      );
+      mapRef.current.setPaintProperty(
+        ROUTE_LAYER_ID,
+        'line-width',
+        isFallback ? 4 : 6,
+      );
+    }
+
+    source.setData({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates },
+      properties: {},
+    });
+  }, [mapReady, routeCoordinates, userLocation, destinationLatLng]);
+
+  // Fit bounds (once per destination)
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
     if (!userLocation || !destinationLatLng || hasFittedRef.current) return;
 
-    const L = LRef.current;
     const coords = buildFitCoordinates({
       userLocation,
       destination: destinoAtual,
@@ -196,19 +233,31 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
 
     if (coords.length < 2) return;
 
-    mapInstance.current.fitBounds(
-      L.latLngBounds(coords.map((c) => L.latLng(c.latitude, c.longitude))),
-      { padding: [30, 30] },
-    );
+    const lngs = coords.map((c) => c.longitude);
+    const lats = coords.map((c) => c.latitude);
+    const bounds: LngLatBoundsLike = [
+      [Math.min(...lngs), Math.min(...lats)],
+      [Math.max(...lngs), Math.max(...lats)],
+    ];
+
+    mapRef.current.fitBounds(bounds, { padding: 50, duration: 600 });
     hasFittedRef.current = true;
   }, [mapReady, userLocation, destinationLatLng, routeCoordinates, destinoAtual]);
 
-  // Reset fit-once flag when the destination changes
+  // Reset fit-once flag when destination changes
   useEffect(() => {
     hasFittedRef.current = false;
   }, [destinoAtual?.id]);
 
-  return <div ref={mapRef} style={styles.container as React.CSSProperties} />;
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        ...(styles.container as React.CSSProperties),
+        ...((style as React.CSSProperties) || {}),
+      }}
+    />
+  );
 }
 
 const styles = StyleSheet.create({
@@ -217,5 +266,6 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 10,
     overflow: 'hidden',
+    backgroundColor: '#f5f5f5',
   },
 });

@@ -1,107 +1,83 @@
+// src/features/map/components/LocationMap.web.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import type * as LeafletNS from 'leaflet';
+import maplibregl, { Map as MapLibreMap, Marker } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { LocationMapProps } from '../types';
 import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
+import { MAP_STYLE_URL } from '../utils/mapStyle';
 
-type LeafletModule = typeof LeafletNS;
-type LeafletMap = LeafletNS.Map;
-type LeafletMarker = LeafletNS.Marker;
-
-export default function LocationMap({ pontosRota }: LocationMapProps) {
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstance = useRef<LeafletMap | null>(null);
-  const LRef = useRef<LeafletModule | null>(null);
-  const destMarkerRef = useRef<LeafletMarker | null>(null);
+export default function LocationMap({ pontosRota, style }: LocationMapProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const destMarkerRef = useRef<Marker | null>(null);
 
   const [mapReady, setMapReady] = useState(false);
-  const [loadingMap, setLoadingMap] = useState(true);
 
-  const destinoAtual = useMemo(() => {
-    return normalizeRoutePoints(pontosRota)[0] ?? null;
-  }, [pontosRota]);
-
+  const destinoAtual = useMemo(
+    () => normalizeRoutePoints(pontosRota)[0] ?? null,
+    [pontosRota],
+  );
   const destinationLatLng = useMemo(
     () => (destinoAtual ? pointToLatLng(destinoAtual) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [destinoAtual?.id, destinoAtual?.latitude, destinoAtual?.longitude],
   );
 
-  // ─── Map initialisation ───────────────────────────────────────────────────
-
   useEffect(() => {
-    let mounted = true;
+    if (!containerRef.current || mapRef.current) return;
 
-    const initMap = async () => {
-      if (mapInstance.current || !mapRef.current) return;
-
-      const leafletModule = await import('leaflet');
-      const L = (leafletModule.default ?? leafletModule) as LeafletModule;
-      LRef.current = L;
-
-      if (!mounted || !mapRef.current) return;
-
-      const map = L.map(mapRef.current, { zoomControl: true }).setView([-23.55, -46.63], 13);
-
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-      }).addTo(map);
-
-      mapInstance.current = map;
-      setMapReady(true);
-      setLoadingMap(false);
-    };
-
-    initMap().catch((err) => {
-      console.error('Erro Leaflet:', err);
-      setLoadingMap(false);
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: MAP_STYLE_URL,
+      center: [-46.63, -23.55],
+      zoom: 12,
+      attributionControl: { compact: true },
     });
 
+    map.on('load', () => setMapReady(true));
+    mapRef.current = map;
+
     return () => {
-      mounted = false;
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-        mapInstance.current = null;
-      }
+      destMarkerRef.current?.remove();
+      destMarkerRef.current = null;
+      map.remove();
+      mapRef.current = null;
     };
   }, []);
 
-  // ─── Destination marker ───────────────────────────────────────────────────
-
   useEffect(() => {
-    if (!mapReady || !mapInstance.current || !LRef.current) return;
-    const map = mapInstance.current;
-    const L = LRef.current;
+    if (!mapReady || !mapRef.current) return;
 
     if (!destinationLatLng) {
-      if (destMarkerRef.current) {
-        map.removeLayer(destMarkerRef.current);
-        destMarkerRef.current = null;
-      }
+      destMarkerRef.current?.remove();
+      destMarkerRef.current = null;
       return;
     }
 
-    const latLng = L.latLng(destinationLatLng.latitude, destinationLatLng.longitude);
+    const lngLat: [number, number] = [
+      destinationLatLng.longitude,
+      destinationLatLng.latitude,
+    ];
 
     if (destMarkerRef.current) {
-      destMarkerRef.current.setLatLng(latLng);
+      destMarkerRef.current.setLngLat(lngLat);
     } else {
-      destMarkerRef.current = L.marker(latLng).addTo(map);
+      destMarkerRef.current = new maplibregl.Marker({ color: '#EA4335' })
+        .setLngLat(lngLat)
+        .addTo(mapRef.current);
     }
 
-    map.setView(latLng, map.getZoom());
+    mapRef.current.flyTo({ center: lngLat, zoom: 15 });
   }, [mapReady, destinationLatLng]);
 
   return (
-    <View style={styles.container}>
-      <div ref={mapRef} style={styles.map as React.CSSProperties} />
-
-      {loadingMap && (
+    <View style={[styles.container, style]}>
+      <div ref={containerRef} style={styles.map as React.CSSProperties} />
+      {!mapReady && (
         <View pointerEvents="none" style={styles.loadingOverlay}>
-          <ActivityIndicator size="small" />
+          <ActivityIndicator size="small" color="#00B4D8" />
         </View>
       )}
     </View>

@@ -1,6 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import MapLibreGL from '@maplibre/maplibre-react-native';
+
+import { MAP_STYLE_JSON } from '../utils/mapStyle';
+
+MapLibreGL.setAccessToken(null);
 
 export interface PickerLatLng {
   latitude: number;
@@ -12,173 +16,115 @@ interface MapPointPickerProps {
   onLocationChange?: (location: PickerLatLng) => void;
 }
 
-function buildPickerHtml(initial?: PickerLatLng): string {
-  const lat = initial?.latitude ?? -15.78;
-  const lng = initial?.longitude ?? -47.93;
-  const zoom = initial ? 16 : 5;
+const FALLBACK: PickerLatLng = { latitude: -15.78, longitude: -47.93 };
 
-  return `<!doctype html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; background: #f5f5f5; }
-    body { overflow: hidden; }
-    .leaflet-container { width: 100%; height: 100%; }
-    .custom-pin { background: transparent; border: none; }
-    #hint {
-      position: absolute;
-      bottom: 36px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.62);
-      color: #fff;
-      padding: 5px 14px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-family: sans-serif;
-      z-index: 1000;
-      white-space: nowrap;
-      pointer-events: none;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <div id="hint">Toque no mapa ou arraste o pino para ajustar</div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    (function() {
-      if (typeof L === 'undefined') return;
+type MapLibrePressEvent = {
+  geometry: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+};
 
-      var map = L.map('map', { zoomControl: true }).setView([${lat}, ${lng}], ${zoom});
+export default function MapPointPicker({
+  initialLocation,
+  onLocationChange,
+}: MapPointPickerProps) {
+  const cameraRef = useRef<MapLibreGL.Camera | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [position, setPosition] = useState<PickerLatLng>(
+    initialLocation ?? FALLBACK,
+  );
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
-      }).addTo(map);
-
-      var pinHtml = [
-        '<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.4))">',
-          '<div style="',
-            'width:34px;height:34px;border-radius:50%;',
-            'background:#4285F4;',
-            'color:white;display:flex;align-items:center;justify-content:center;',
-            'font-size:20px;',
-            'border:3px solid white;',
-          '">📍</div>',
-          '<div style="',
-            'width:0;height:0;',
-            'border-left:7px solid transparent;',
-            'border-right:7px solid transparent;',
-            'border-top:10px solid #4285F4;',
-            'margin-top:-2px;',
-          '"></div>',
-        '</div>',
-      ].join('');
-
-      var icon = L.divIcon({
-        className: 'custom-pin',
-        html: pinHtml,
-        iconSize: [34, 50],
-        iconAnchor: [17, 50],
-        popupAnchor: [0, -52],
-      });
-
-      var marker = L.marker([${lat}, ${lng}], { icon: icon, draggable: true }).addTo(map);
-
-      function notify(lat, lng) {
-        try {
-          window.ReactNativeWebView &&
-            window.ReactNativeWebView.postMessage(
-              JSON.stringify({ type: 'locationChanged', latitude: lat, longitude: lng })
-            );
-        } catch(e) {}
-      }
-
-      marker.on('dragend', function(e) {
-        var pos = e.target.getLatLng();
-        notify(pos.lat, pos.lng);
-      });
-
-      map.on('click', function(e) {
-        marker.setLatLng(e.latlng);
-        notify(e.latlng.lat, e.latlng.lng);
-      });
-
-      window.setMarkerPosition = function(lat, lng) {
-        var ll = L.latLng(lat, lng);
-        marker.setLatLng(ll);
-        map.setView(ll, 16, { animate: true });
-      };
-
-      try {
-        window.ReactNativeWebView &&
-          window.ReactNativeWebView.postMessage(
-            JSON.stringify({ type: 'mapReady', latitude: ${lat}, longitude: ${lng} })
-          );
-      } catch(e) {}
-    })();
-  </script>
-</body>
-</html>`;
-}
-
-export default function MapPointPicker({ initialLocation, onLocationChange }: MapPointPickerProps) {
-  const [loading, setLoading] = useState(true);
-  const webViewRef = useRef<any>(null);
-  const prevLocationRef = useRef<PickerLatLng | undefined>(initialLocation);
-
-  const html = useMemo(() => buildPickerHtml(initialLocation), []);
-
+  // Sincroniza posição interna quando a prop muda externamente
   useEffect(() => {
-    if (!initialLocation || !webViewRef.current) return;
-    const prev = prevLocationRef.current;
+    if (!initialLocation) return;
     if (
-      prev?.latitude === initialLocation.latitude &&
-      prev?.longitude === initialLocation.longitude
+      initialLocation.latitude === position.latitude &&
+      initialLocation.longitude === position.longitude
     ) {
       return;
     }
-    prevLocationRef.current = initialLocation;
-    webViewRef.current.injectJavaScript(
-      `window.setMarkerPosition(${initialLocation.latitude}, ${initialLocation.longitude}); true;`,
-    );
-  }, [initialLocation]);
+    setPosition(initialLocation);
+    if (mapReady && cameraRef.current) {
+      cameraRef.current.setCamera({
+        centerCoordinate: [initialLocation.longitude, initialLocation.latitude],
+        zoomLevel: 16,
+        animationDuration: 400,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialLocation?.latitude, initialLocation?.longitude]);
 
-  const handleMessage = useCallback(
-    (event: any) => {
-      try {
-        const data = JSON.parse(event.nativeEvent.data);
-        if (data.type === 'mapReady') {
-          setLoading(false);
-        } else if (data.type === 'locationChanged') {
-          onLocationChange?.({ latitude: data.latitude, longitude: data.longitude });
-        }
-      } catch {}
+  const handleMapReady = useCallback(() => {
+    setMapReady(true);
+  }, []);
+
+  const updatePosition = useCallback(
+    (loc: PickerLatLng) => {
+      setPosition(loc);
+      onLocationChange?.(loc);
     },
     [onLocationChange],
   );
 
+  const handlePress = useCallback(
+    (event: MapLibrePressEvent) => {
+      const [longitude, latitude] = event.geometry.coordinates;
+      updatePosition({ latitude, longitude });
+    },
+    [updatePosition],
+  );
+
+  const handleDragEnd = useCallback(
+    (event: MapLibrePressEvent) => {
+      const [longitude, latitude] = event.geometry.coordinates;
+      updatePosition({ latitude, longitude });
+    },
+    [updatePosition],
+  );
+
   return (
     <View style={styles.container}>
-      <WebView
-        ref={webViewRef}
-        style={styles.webview}
-        originWhitelist={['*']}
-        source={{ html, baseUrl: 'https://buska.projeto1.lsd.ufcg.edu.br' }}
-        userAgent="BusKa/1.0.0-beta (React Native; OpenStreetMap tile client, contact: contato.buska@gmail.com)"
-        javaScriptEnabled
-        domStorageEnabled
-        scrollEnabled={false}
-        nestedScrollEnabled={false}
-        setSupportMultipleWindows={false}
-        onMessage={handleMessage}
-        androidLayerType="software"
-      />
-      {loading && (
+      <MapLibreGL.MapView
+        style={styles.map}
+        mapStyle={MAP_STYLE_JSON}
+        attributionEnabled
+        logoEnabled={false}
+        compassEnabled={false}
+        onDidFinishLoadingMap={handleMapReady}
+        onPress={handlePress as unknown as (e: any) => void}
+      >
+        <MapLibreGL.Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: [
+              initialLocation?.longitude ?? FALLBACK.longitude,
+              initialLocation?.latitude ?? FALLBACK.latitude,
+            ],
+            zoomLevel: initialLocation ? 16 : 4,
+          }}
+        />
+
+        <MapLibreGL.PointAnnotation
+          id="picker-pin"
+          coordinate={[position.longitude, position.latitude]}
+          draggable
+          onDragEnd={handleDragEnd as unknown as (e: any) => void}
+        >
+          <View style={styles.pinWrapper}>
+            <View style={styles.pinHead}>
+              <Text style={styles.pinIcon}>📍</Text>
+            </View>
+            <View style={styles.pinTail} />
+          </View>
+        </MapLibreGL.PointAnnotation>
+      </MapLibreGL.MapView>
+
+      <View pointerEvents="none" style={styles.hint}>
+        <Text style={styles.hintText}>Toque no mapa ou arraste o pino para ajustar</Text>
+      </View>
+
+      {!mapReady && (
         <View pointerEvents="none" style={styles.loadingOverlay}>
           <ActivityIndicator size="small" color="#00B4D8" />
         </View>
@@ -195,10 +141,58 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#f5f5f5',
   },
-  webview: {
+  map: {
     flex: 1,
-    opacity: 0.99,
-    backgroundColor: 'transparent',
+  },
+  pinWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinHead: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#4285F4',
+    borderWidth: 3,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  pinIcon: {
+    fontSize: 18,
+    lineHeight: 20,
+  },
+  pinTail: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 10,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#4285F4',
+    marginTop: -2,
+  },
+  hint: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  hintText: {
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    color: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 20,
+    fontSize: 12,
+    overflow: 'hidden',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

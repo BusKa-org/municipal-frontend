@@ -1,24 +1,45 @@
-// src/components/map/RouteMap.native.tsx
-import React, { useEffect, useMemo, useRef } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import MapLibreGL from '@maplibre/maplibre-react-native';
 
-import type { RouteMapProps } from '../types';
+import type { LatLng, RouteMapProps } from '../types';
 import { useLocationPermission } from '../hooks/useLocationPermissionWrapper';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { useArrivalDetection } from '../hooks/useArrivalDetection';
 import { useRoutePolyline } from '../hooks/useRoutePolyline';
-import { useLeafletWebViewBridge } from '../hooks/useLeafletWebViewBridge';
-import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
+import { normalizeRoutePoints, pointToLatLng, buildFitCoordinates } from '../utils/points';
+import { MAP_STYLE_JSON } from '../utils/mapStyle';
 
-export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) {
+// MapLibre não exige access token, mas alguns binários esperam a chamada.
+// Passar string vazia ou null evita warnings.
+MapLibreGL.setAccessToken(null);
+
+const DEFAULT_CENTER: [number, number] = [-46.63, -23.55]; // [lng, lat]
+
+function toLngLat(coord: LatLng): [number, number] {
+  return [coord.longitude, coord.latitude];
+}
+
+export default function RouteMap({ pontosRota, onPontoChegado, style }: RouteMapProps) {
+  const cameraRef = useRef<MapLibreGL.Camera | null>(null);
   const hasFittedRef = useRef(false);
+
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(false);
 
   const pontosValidos = useMemo(() => normalizeRoutePoints(pontosRota), [pontosRota]);
   const destinoAtual = pontosValidos[0] ?? null;
   const destinationLatLng = useMemo(
     () => (destinoAtual ? pointToLatLng(destinoAtual) : null),
-    [destinoAtual?.id, destinoAtual?.latitude, destinoAtual?.longitude]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [destinoAtual?.id, destinoAtual?.latitude, destinoAtual?.longitude],
   );
 
   const {
@@ -49,24 +70,6 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     minRefetchDistanceMeters: 20,
   });
 
-  const {
-    webViewRef,
-    html,
-    mapReady,
-    mapError,
-    loadingMap,
-    handleMessage,
-    reloadMap,
-    setDestination,
-    clearDestination,
-    setUserMarker,
-    clearUserMarker,
-    setRoute,
-    clearRoute,
-    fitToCoordinates,
-    reloadKey,
-  } = useLeafletWebViewBridge();
-
   useArrivalDetection({
     userLocation,
     destination: destinoAtual,
@@ -74,11 +77,7 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     onArrive: (point) => {
       resetRoute();
       resetLocation();
-      clearRoute();
-
-      if (onPontoChegado) {
-        onPontoChegado(point);
-      }
+      onPontoChegado?.(point);
     },
   });
 
@@ -90,100 +89,147 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     if (permissionError) {
       Alert.alert(
         'Permissão negada',
-        'Sem acesso à localização, não é possível mostrar a rota.'
+        'Sem acesso à localização, não é possível mostrar a rota.',
       );
     }
   }, [permissionError]);
 
   useEffect(() => {
-    if (!mapReady) return;
-
-    if (!destinoAtual) {
-      clearDestination();
-      clearUserMarker();
-      clearRoute();
-      hasFittedRef.current = false;
-      return;
-    }
-
-    setDestination(pointToLatLng(destinoAtual));
-  }, [
-    mapReady,
-    destinoAtual,
-    clearDestination,
-    clearUserMarker,
-    clearRoute,
-    setDestination,
-  ]);
-
-  useEffect(() => {
-    if (!mapReady) return;
-
-    if (!userLocation) {
-      clearUserMarker();
-      return;
-    }
-
-    setUserMarker(userLocation);
-  }, [mapReady, userLocation, clearUserMarker, setUserMarker]);
-
-  useEffect(() => {
-    if (!mapReady) return;
-
-    if (routeCoordinates.length < 2) {
-      clearRoute();
-      return;
-    }
-
-    setRoute(routeCoordinates);
-  }, [mapReady, routeCoordinates, clearRoute, setRoute]);
-
-  useEffect(() => {
-    if (!mapReady || !userLocation || !destinationLatLng) return;
-
-    if (!hasFittedRef.current) {
-      const coords = [userLocation, destinationLatLng, ...routeCoordinates];
-      fitToCoordinates(coords);
-      hasFittedRef.current = true;
-    }
-  }, [mapReady, userLocation, destinationLatLng, routeCoordinates, fitToCoordinates]);
-
-  useEffect(() => {
     hasFittedRef.current = false;
   }, [destinoAtual?.id]);
 
-  const overlayError =
-    mapError
-      ? 'Verifique sua conexão com a internet'
-      : permissionError || locationError || routeError;
+  // Fit camera once we have user location + destination
+  useEffect(() => {
+    if (!mapReady || !cameraRef.current) return;
+    if (!userLocation || !destinationLatLng) return;
+    if (hasFittedRef.current) return;
 
-  const overlayLoading = loadingMap || permissionLoading || locationLoading || routeLoading;
+    const coords = buildFitCoordinates({
+      userLocation,
+      destination: destinoAtual,
+      polyline: routeCoordinates,
+    });
 
-  const handleRetry = async () => {
-    reloadMap();
+    if (coords.length < 2) return;
+
+    const lngs = coords.map((c) => c.longitude);
+    const lats = coords.map((c) => c.latitude);
+    const sw: [number, number] = [Math.min(...lngs), Math.min(...lats)];
+    const ne: [number, number] = [Math.max(...lngs), Math.max(...lats)];
+
+    cameraRef.current.fitBounds(ne, sw, 60, 600);
+    hasFittedRef.current = true;
+  }, [mapReady, userLocation, destinationLatLng, routeCoordinates, destinoAtual]);
+
+  // Coordenadas usadas pra desenhar a polyline. Se o backend retornar a rota,
+  // usamos ela. Senão (erro 5xx do /routing/route por OSRM fora do ar, etc),
+  // caímos pra uma linha reta entre origem e destino — melhor que não mostrar
+  // nada.
+  const polylineCoordinates = useMemo<LatLng[]>(() => {
+    if (routeCoordinates.length >= 2) return routeCoordinates;
+    if (userLocation && destinationLatLng) {
+      return [userLocation, destinationLatLng];
+    }
+    return [];
+  }, [routeCoordinates, userLocation, destinationLatLng]);
+
+  const isRouteFallback = routeCoordinates.length < 2 && polylineCoordinates.length >= 2;
+
+  const routeGeoJson = useMemo(() => {
+    if (polylineCoordinates.length < 2) return null;
+    return {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: polylineCoordinates.map(toLngLat),
+      },
+      properties: {},
+    };
+  }, [polylineCoordinates]);
+
+  const handleMapReady = useCallback(() => {
+    setMapReady(true);
+  }, []);
+
+  const handleMapError = useCallback(() => {
+    setMapError(true);
+  }, []);
+
+  const handleRetry = useCallback(async () => {
+    setMapError(false);
+    setMapReady(false);
     resetRoute();
     resetLocation();
     hasFittedRef.current = false;
     await requestPermission();
-  };
+  }, [requestPermission, resetLocation, resetRoute]);
+
+  // Só consideramos "erro fatal" coisas que impedem o mapa de funcionar:
+  // mapError (mapa não carregou), permissionError (sem GPS), locationError
+  // (não obteve a localização). O routeError NÃO é fatal — caímos pra linha
+  // reta entre origem e destino e o mapa continua funcionando.
+  const overlayError =
+    mapError ? 'Verifique sua conexão com a internet' : permissionError || locationError;
+
+  const overlayLoading = !mapReady || permissionLoading || locationLoading;
 
   return (
-    <View style={styles.container}>
-      <WebView
-        key={reloadKey}
-        ref={webViewRef}
-        style={[styles.webview, mapError && styles.hidden]}
-        originWhitelist={['*']}
-        source={{ html, baseUrl: 'https://buska.projeto1.lsd.ufcg.edu.br' }}
-        userAgent="BusKa/1.0.0-beta (React Native; OpenStreetMap tile client, contact: contato.buska@gmail.com)"
-        javaScriptEnabled
-        domStorageEnabled
-        scrollEnabled={false}
-        nestedScrollEnabled={false}
-        setSupportMultipleWindows={false}
-        onMessage={handleMessage}
-        androidLayerType="software"
-      />
+    <View style={[styles.container, style]}>
+      <MapLibreGL.MapView
+        style={[styles.map, mapError && styles.hidden]}
+        mapStyle={MAP_STYLE_JSON}
+        attributionEnabled
+        logoEnabled={false}
+        compassEnabled={false}
+        onDidFinishLoadingMap={handleMapReady}
+        onDidFailLoadingMap={handleMapError}
+      >
+        <MapLibreGL.Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: DEFAULT_CENTER,
+            zoomLevel: 12,
+          }}
+        />
+
+        {destinationLatLng && (
+          <MapLibreGL.PointAnnotation
+            id="destination"
+            coordinate={toLngLat(destinationLatLng)}
+          >
+            <View style={styles.destMarker}>
+              <View style={styles.destMarkerInner} />
+            </View>
+          </MapLibreGL.PointAnnotation>
+        )}
+
+        {userLocation && (
+          <MapLibreGL.PointAnnotation
+            id="user"
+            coordinate={toLngLat(userLocation)}
+          >
+            <View style={styles.userMarker} />
+          </MapLibreGL.PointAnnotation>
+        )}
+
+        {routeGeoJson && (
+          <MapLibreGL.ShapeSource id="routeSource" shape={routeGeoJson}>
+            <MapLibreGL.LineLayer
+              id="routeLine"
+              style={{
+                lineColor: '#007bff',
+                lineWidth: isRouteFallback ? 4 : 6,
+                lineOpacity: isRouteFallback ? 0.5 : 0.85,
+                lineCap: 'round',
+                lineJoin: 'round',
+                // Quando estamos no fallback (sem dados do OSRM), desenhamos
+                // tracejado pra indicar que é uma aproximação.
+                lineDasharray: isRouteFallback ? [2, 1] : [1, 0],
+              }}
+            />
+          </MapLibreGL.ShapeSource>
+        )}
+      </MapLibreGL.MapView>
 
       {overlayLoading && !overlayError && (
         <View pointerEvents="none" style={styles.loadingOverlay}>
@@ -213,14 +259,46 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     overflow: 'hidden',
   },
-  webview: {
+  map: {
     flex: 1,
-    opacity: 0.99,
-    backgroundColor: 'transparent',
   },
   hidden: {
     opacity: 0,
     height: 0,
+  },
+  destMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EA4335',
+    borderWidth: 3,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  destMarkerInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  userMarker: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#2196F3',
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

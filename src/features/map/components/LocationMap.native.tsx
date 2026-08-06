@@ -1,58 +1,90 @@
-// src/features/map/components/LocationMap.native.tsx
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import MapLibreGL from '@maplibre/maplibre-react-native';
 
 import type { LocationMapProps } from '../types';
-import { useLeafletWebViewBridge } from '../hooks/useLeafletWebViewBridge';
 import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
+import { MAP_STYLE_JSON } from '../utils/mapStyle';
 
-export default function LocationMap({ pontosRota }: LocationMapProps) {
+MapLibreGL.setAccessToken(null);
+
+const DEFAULT_CENTER: [number, number] = [-46.63, -23.55];
+
+export default function LocationMap({ pontosRota, style }: LocationMapProps) {
+  const cameraRef = useRef<MapLibreGL.Camera | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState(false);
+
   const pontosValidos = useMemo(() => normalizeRoutePoints(pontosRota), [pontosRota]);
   const destinoAtual = pontosValidos[0] ?? null;
+  const destinationLatLng = useMemo(
+    () => (destinoAtual ? pointToLatLng(destinoAtual) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [destinoAtual?.id, destinoAtual?.latitude, destinoAtual?.longitude],
+  );
 
-  const {
-    webViewRef,
-    html,
-    mapReady,
-    mapError,
-    loadingMap,
-    handleMessage,
-    reloadMap,
-    setDestination,
-    clearDestination,
-    reloadKey,
-  } = useLeafletWebViewBridge();
-
-  useEffect(() => {
-    if (!mapReady) return;
-
-    if (!destinoAtual) {
-      clearDestination();
-      return;
+  const handleMapReady = useCallback(() => {
+    setMapReady(true);
+    if (cameraRef.current && destinationLatLng) {
+      cameraRef.current.setCamera({
+        centerCoordinate: [destinationLatLng.longitude, destinationLatLng.latitude],
+        zoomLevel: 15,
+        animationDuration: 0,
+      });
     }
+  }, [destinationLatLng]);
 
-    setDestination(pointToLatLng(destinoAtual));
-  }, [mapReady, destinoAtual, clearDestination, setDestination]);
+  const handleMapError = useCallback(() => {
+    setMapError(true);
+  }, []);
+
+  // Re-centraliza quando o destino mudar após o mapa pronto
+  React.useEffect(() => {
+    if (!mapReady || !cameraRef.current || !destinationLatLng) return;
+    cameraRef.current.setCamera({
+      centerCoordinate: [destinationLatLng.longitude, destinationLatLng.latitude],
+      zoomLevel: 15,
+      animationDuration: 400,
+    });
+  }, [mapReady, destinationLatLng]);
+
+  const handleRetry = useCallback(() => {
+    setMapError(false);
+    setMapReady(false);
+  }, []);
 
   return (
-    <View style={styles.container}>
-      <WebView
-        key={reloadKey}
-        ref={webViewRef}
-        style={[styles.webview, mapError && styles.hidden]}
-        originWhitelist={['*']}
-        source={{ html }}
-        javaScriptEnabled
-        domStorageEnabled
-        scrollEnabled={false}
-        nestedScrollEnabled={false}
-        setSupportMultipleWindows={false}
-        onMessage={handleMessage}
-        androidLayerType="software"
-      />
+    <View style={[styles.container, style]}>
+      <MapLibreGL.MapView
+        style={[styles.map, mapError && styles.hidden]}
+        mapStyle={MAP_STYLE_JSON}
+        attributionEnabled
+        logoEnabled={false}
+        compassEnabled={false}
+        onDidFinishLoadingMap={handleMapReady}
+        onDidFailLoadingMap={handleMapError}
+      >
+        <MapLibreGL.Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: DEFAULT_CENTER,
+            zoomLevel: 12,
+          }}
+        />
 
-      {loadingMap && !mapError && (
+        {destinationLatLng && (
+          <MapLibreGL.PointAnnotation
+            id="destination"
+            coordinate={[destinationLatLng.longitude, destinationLatLng.latitude]}
+          >
+            <View style={styles.destMarker}>
+              <View style={styles.destMarkerInner} />
+            </View>
+          </MapLibreGL.PointAnnotation>
+        )}
+      </MapLibreGL.MapView>
+
+      {!mapReady && !mapError && (
         <View pointerEvents="none" style={styles.loadingOverlay}>
           <ActivityIndicator size="small" color="#00B4D8" />
         </View>
@@ -63,7 +95,7 @@ export default function LocationMap({ pontosRota }: LocationMapProps) {
           <Text style={styles.errorIcon}>🗺️</Text>
           <Text style={styles.errorTitle}>Mapa indisponível</Text>
           <Text style={styles.errorSubtitle}>Verifique sua conexão com a internet</Text>
-          <TouchableOpacity style={styles.reloadButton} onPress={reloadMap}>
+          <TouchableOpacity style={styles.reloadButton} onPress={handleRetry}>
             <Text style={styles.reloadText}>Tentar novamente</Text>
           </TouchableOpacity>
         </View>
@@ -80,14 +112,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     overflow: 'hidden',
   },
-  webview: {
+  map: {
     flex: 1,
-    opacity: 0.99,
-    backgroundColor: 'transparent',
   },
   hidden: {
     opacity: 0,
     height: 0,
+  },
+  destMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EA4335',
+    borderWidth: 3,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  destMarkerInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
