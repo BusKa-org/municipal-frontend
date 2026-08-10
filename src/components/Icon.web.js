@@ -28,13 +28,19 @@ const normalizeIconName = (name) => {
 
 /**
  * Web Icon component using Material Icons font
+ *
+ * @param {object} props
+ * @param {string} props.name
+ * @param {string | number} [props.size]
+ * @param {string} [props.color]
+ * @param {object} [props.style]
  */
-const Icon = ({ 
-  name, 
-  size = 'base', 
-  color = colors.text.primary, 
-  style,
-  ...props 
+const Icon = ({
+  name,
+  size = 'base',
+  color = colors.text.primary,
+  style = undefined,
+  ...props
 }) => {
   // Resolve size
   const resolvedSize = typeof size === 'string' 

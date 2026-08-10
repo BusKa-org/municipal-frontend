@@ -106,12 +106,12 @@ export const fontSize = {
 // ===========================================
 // FONT WEIGHTS
 // ===========================================
-export const fontWeight = {
+export const fontWeight = /** @type {const} */ ({
   regular: '400',
   medium: '500',
   semiBold: '600',
   bold: '700',
-};
+});
 
 // ===========================================
 // LINE HEIGHTS
