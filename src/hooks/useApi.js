@@ -204,6 +204,8 @@ export function useFetch(fetchFn, deps = [], options = {}) {
   const api = useApi(apiOptions);
   const hasLoadedRef = useRef(false);
 
+  const depsArray = Array.isArray(deps) ? deps : [];
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -213,7 +215,8 @@ export function useFetch(fetchFn, deps = [], options = {}) {
     };
 
     load();
-  }, [enabled, ...deps]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, ...depsArray]);
 
   return {
     ...api,

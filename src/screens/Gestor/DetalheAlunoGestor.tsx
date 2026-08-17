@@ -31,7 +31,7 @@ const DetalheAlunoGestor = ({ route, navigation }: any) => {
 
   const { data: aluno, isLoading, isError, error, refetch } = useFetch<AlunoResponse>(
     fetchAluno,
-    null,
+    [alunoId],
     { showErrorToast: true },
   );
 
