@@ -11,7 +11,7 @@ import { useRoutePolyline } from '../hooks/useRoutePolyline';
 import { useLeafletWebViewBridge } from '../hooks/useLeafletWebViewBridge';
 import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
 
-export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) {
+export default function RouteMap({ pontosRota, onPontoChegado, fill }: RouteMapProps) {
   const hasFittedRef = useRef(false);
 
   const pontosValidos = useMemo(() => normalizeRoutePoints(pontosRota), [pontosRota]);
@@ -168,7 +168,7 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, fill && styles.fill]}>
       <WebView
         key={reloadKey}
         ref={webViewRef}
@@ -212,6 +212,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#fff',
     overflow: 'hidden',
+  },
+  fill: {
+    flex: 1,
+    height: undefined,
+    borderRadius: 0,
   },
   webview: {
     flex: 1,

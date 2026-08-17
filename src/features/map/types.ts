@@ -19,6 +19,7 @@ export type LocationMapProps = {
 export type RouteMapProps = {
   pontosRota: RoutePoint[];
   onPontoChegado?: (ponto: RoutePoint) => void;
+  fill?: boolean;
 };
 
 export type RoutePolylineResult = {

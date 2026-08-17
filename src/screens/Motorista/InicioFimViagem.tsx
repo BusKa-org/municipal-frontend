@@ -286,6 +286,7 @@ const InicioFimViagem: React.FC<Props> = ({ navigation, route }) => {
       <View style={styles.mapScreen}>
         {/* Full-screen live map */}
         <RouteMap
+          fill
           pontosRota={pontosRota}
           onPontoChegado={() => {
             // advance through stops as driver arrives
