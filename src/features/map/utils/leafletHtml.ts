@@ -87,7 +87,7 @@ export function buildLeafletHtml(): string {
             this.mapInstance = L.map('map', {
               zoomControl: true,
               preferCanvas: false,
-            }).setView([-23.55, -46.63], 13);
+            }).setView([-15.78, -47.93], 4);
   
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
               attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',

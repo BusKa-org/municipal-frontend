@@ -17,6 +17,7 @@ import { alunoService } from '../../services';
 import { LocationMap } from '../../features/map/index';
 import { unwrapItems } from '../../types';
 import type { PontoFlatResponse } from '../../types';
+import { getStatusLabel, getStatusViagem, isEmAndamento } from '../../domain/viagem';
 
 type RootParamList = Record<string, object | undefined>;
 type Props = {
@@ -74,6 +75,8 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
   const [proximoPonto, setProximoPonto] = useState<PontoFlatResponse | null>(null);
 
   const viagemId = (viagem?.id ?? viagem?.viagem_id) as string | undefined;
+  const statusViagem = getStatusViagem(viagem);
+  const emAndamento = isEmAndamento(statusViagem);
   const rotaId = rota?.id as string | undefined;
 
   // Load route stops
@@ -133,19 +136,30 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
         latitude: loc.latitude,
         longitude: loc.longitude,
       });
-      obterMinhaPosicao();
     } catch {
       // keep showing last known position
     } finally {
       setLoading(false);
     }
-  }, [viagemId, obterMinhaPosicao]);
+  }, [viagemId]);
 
   useEffect(() => {
+    obterMinhaPosicao();
+    const interval = setInterval(obterMinhaPosicao, 15_000);
+    return () => clearInterval(interval);
+  }, [obterMinhaPosicao]);
+
+  useEffect(() => {
+    if (!emAndamento) {
+      setPosicaoMotorista(null);
+      setLoading(false);
+      return;
+    }
+
     buscarLocalizacao();
     const interval = setInterval(buscarLocalizacao, 5_000);
     return () => clearInterval(interval);
-  }, [buscarLocalizacao]);
+  }, [emAndamento, buscarLocalizacao]);
 
   useEffect(() => {
     if (!posicaoMotorista || !posicaoAluno) return;
@@ -185,7 +199,9 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
 
   const pontosRotaMapa = posicaoMotorista
     ? [{ latitude: posicaoMotorista.latitude, longitude: posicaoMotorista.longitude }]
-    : [];
+    : (pontosRota as unknown as { latitude?: number; longitude?: number }[])
+        .filter((p) => p?.latitude != null && p?.longitude != null)
+        .map((p) => ({ latitude: Number(p.latitude), longitude: Number(p.longitude) }));
 
   const etaParaOnibus =
     distanciaMetros != null ? etaMinutos(distanciaMetros) : null;
@@ -250,7 +266,7 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
             <Text style={styles.mapLoadingText}>Buscando localização do ônibus...</Text>
           </View>
         ) : (
-          <LocationMap pontosRota={pontosRotaMapa} />
+          <LocationMap pontosRota={pontosRotaMapa} usuario={posicaoAluno} />
         )}
       </View>
 
@@ -336,8 +352,19 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
         {/* Status badge */}
         <View style={styles.statusContainer}>
           <View style={styles.statusBadge}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Em movimento</Text>
+            <View
+              style={[
+                styles.statusDot,
+                !emAndamento && { backgroundColor: colors.text.hint },
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                !emAndamento && { color: colors.text.secondary },
+              ]}>
+              {emAndamento ? 'Em movimento' : getStatusLabel(statusViagem)}
+            </Text>
           </View>
         </View>
       </View>

@@ -8,6 +8,8 @@
 import React from 'react';
 import { colors, iconSize as themeSizes } from '../theme';
 
+export { IconNames } from './iconNames';
+
 // Size presets mapping to theme
 const sizeMap = {
   xs: themeSizes.xs,    // 12
@@ -28,13 +30,19 @@ const normalizeIconName = (name) => {
 
 /**
  * Web Icon component using Material Icons font
+ *
+ * @param {object} props
+ * @param {string} props.name
+ * @param {string | number} [props.size]
+ * @param {string} [props.color]
+ * @param {object} [props.style]
  */
-const Icon = ({ 
-  name, 
-  size = 'base', 
-  color = colors.text.primary, 
-  style,
-  ...props 
+const Icon = ({
+  name,
+  size = 'base',
+  color = colors.text.primary,
+  style = undefined,
+  ...props
 }) => {
   // Resolve size
   const resolvedSize = typeof size === 'string' 
@@ -69,71 +77,6 @@ const Icon = ({
       {normalizeIconName(name)}
     </span>
   );
-};
-
-// Named exports for common icon sets
-export const IconNames = {
-  // Navigation
-  home: 'home',
-  back: 'arrow-back',
-  forward: 'arrow-forward',
-  menu: 'menu',
-  close: 'close',
-  
-  // Transport
-  bus: 'directions-bus',
-  route: 'route',
-  location: 'location-on',
-  myLocation: 'my-location',
-  map: 'map',
-  
-  // Users
-  person: 'person',
-  group: 'group',
-  badge: 'badge',
-  
-  // Actions
-  add: 'add',
-  edit: 'edit',
-  delete: 'delete',
-  search: 'search',
-  refresh: 'refresh',
-  settings: 'settings',
-  
-  // Status
-  checkCircle: 'check-circle',
-  warning: 'warning',
-  error: 'error',
-  info: 'info',
-  
-  // Communication
-  notifications: 'notifications',
-  notificationsOff: 'notifications-off',
-  chat: 'chat',
-  
-  // Time/Schedule
-  schedule: 'schedule',
-  calendarToday: 'calendar-today',
-  
-  // Trip controls
-  play: 'play-arrow',
-  stop: 'stop',
-  pause: 'pause',
-  
-  // Misc
-  visibility: 'visibility',
-  visibilityOff: 'visibility-off',
-  chevronRight: 'chevron-right',
-  chevronLeft: 'chevron-left',
-  expandMore: 'expand-more',
-  expandLess: 'expand-less',
-  moreVert: 'more-vert',
-  moreHoriz: 'more-horiz',
-  logout: 'logout',
-  login: 'login',
-  send: 'send',
-  flag: 'flag',
-  circle: 'circle',
 };
 
 export default Icon;

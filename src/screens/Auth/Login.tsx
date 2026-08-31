@@ -12,13 +12,13 @@ import {
   ActivityIndicator,
   Animated,
   StatusBar,
-  Image,
   ImageBackground,
   Dimensions,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { Icon, IconNames } from '../../components';
 import { colors } from '../../theme';
+import { Storage, STORAGE_KEYS } from '../../utils/storage';
 
 // Physical screen size — never changes, immune to keyboard resize on Android
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('screen');
@@ -40,7 +40,7 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [senhaFocused, setSenhaFocused] = useState(false);
-  const [lembrarMe, setLembrarMe] = useState(true);
+  const [lembrarMe, setLembrarMe] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateAnim = useRef(new Animated.Value(26)).current;
@@ -60,6 +60,20 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
     ]).start();
   }, [fadeAnim, translateAnim]);
 
+  useEffect(() => {
+    let ativo = true;
+
+    Storage.getItem(STORAGE_KEYS.REMEMBERED_EMAIL).then((salvo) => {
+      if (!ativo || !salvo) return;
+      setEmail(salvo);
+      setLembrarMe(true);
+    });
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
   const handleLogin = async () => {
     setErro('');
 
@@ -71,9 +85,16 @@ const Login: React.FC<LoginProps> = ({ navigation }) => {
     setLoading(true);
 
     try {
-      const result = await login({ email: email.trim(), password: senha });
+      const emailLimpo = email.trim();
+      const result = await login({ email: emailLimpo, password: senha });
 
-      if (!result?.success) {
+      if (result?.success) {
+        if (lembrarMe) {
+          await Storage.setItem(STORAGE_KEYS.REMEMBERED_EMAIL, emailLimpo);
+        } else {
+          await Storage.removeItem(STORAGE_KEYS.REMEMBERED_EMAIL);
+        }
+      } else {
         setErro(result?.error || 'Credenciais inválidas. Verifique seus dados.');
       }
     } catch (error: any) {
@@ -300,32 +321,6 @@ const styles = StyleSheet.create({
   kav: {
     flex: 1,
   },
-  topHero: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 300,
-    backgroundColor: '#0D5BCF',
-  },
-  topHeroCircleLeft: {
-    position: 'absolute',
-    top: 60,
-    left: -80,
-    width: 280,
-    height: 180,
-    borderRadius: 140,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  topHeroCircleRight: {
-    position: 'absolute',
-    top: -10,
-    right: -100,
-    width: 360,
-    height: 220,
-    borderRadius: 180,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
   yellowWave: {
     position: 'absolute',
     top: 250,
@@ -336,43 +331,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 120,
     borderTopRightRadius: 120,
     transform: [{ rotate: '-4deg' }],
-  },
-  whiteCurve: {
-    position: 'absolute',
-    top: 225,
-    left: -60,
-    right: -60,
-    height: 180,
-    backgroundColor: '#EEF3FB',
-    borderTopLeftRadius: 180,
-    borderTopRightRadius: 180,
-  },
-  cloudOne: {
-    position: 'absolute',
-    bottom: 120,
-    left: -40,
-    width: 180,
-    height: 70,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  cloudTwo: {
-    position: 'absolute',
-    bottom: 70,
-    right: -30,
-    width: 220,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-  },
-  cloudThree: {
-    position: 'absolute',
-    bottom: 20,
-    left: 40,
-    width: 260,
-    height: 72,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   scrollContent: {
     flexGrow: 1,

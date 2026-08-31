@@ -12,7 +12,7 @@ type LeafletMap = LeafletNS.Map;
 type LeafletMarker = LeafletNS.Marker;
 type LeafletPolyline = LeafletNS.Polyline;
 
-export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) {
+export default function RouteMap({ pontosRota, onPontoChegado, fill }: RouteMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<LeafletMap | null>(null);
   const LRef = useRef<LeafletModule | null>(null);
@@ -64,7 +64,7 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
 
       if (!mounted || !mapRef.current) return;
 
-      const map = L.map(mapRef.current).setView([-23.55, -46.63], 13);
+      const map = L.map(mapRef.current).setView([-15.78, -47.93], 4);
 
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution:
@@ -208,7 +208,17 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
     hasFittedRef.current = false;
   }, [destinoAtual?.id]);
 
-  return <div ref={mapRef} style={styles.container as React.CSSProperties} />;
+  return (
+    <div
+      ref={mapRef}
+      style={
+        {
+          ...(styles.container as React.CSSProperties),
+          ...(fill ? { height: '100%', flex: 1, borderRadius: 0 } : null),
+        } as React.CSSProperties
+      }
+    />
+  );
 }
 
 const styles = StyleSheet.create({
