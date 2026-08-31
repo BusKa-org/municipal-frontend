@@ -14,6 +14,7 @@ export type NormalizedRoutePoint = RoutePoint & {
 
 export type LocationMapProps = {
   pontosRota: RoutePoint[];
+  usuario?: LatLng | null;
 };
 
 export type RouteMapProps = {
