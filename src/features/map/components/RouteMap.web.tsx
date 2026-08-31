@@ -64,7 +64,7 @@ export default function RouteMap({ pontosRota, onPontoChegado, fill }: RouteMapP
 
       if (!mounted || !mapRef.current) return;
 
-      const map = L.map(mapRef.current).setView([-23.55, -46.63], 13);
+      const map = L.map(mapRef.current).setView([-15.78, -47.93], 4);
 
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution:
