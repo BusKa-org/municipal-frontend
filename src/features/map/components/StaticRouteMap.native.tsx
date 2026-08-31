@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 
+import { useUniversidades, type Universidade } from '../hooks/useUniversidades';
+
 interface RoutePoint {
   id?: string | number;
   latitude: number | string;
@@ -13,9 +15,10 @@ interface RoutePoint {
 
 interface StaticRouteMapProps {
   pontosRota: RoutePoint[];
+  mostrarUniversidades?: boolean;
 }
 
-function buildStaticRouteHtml(points: RoutePoint[]): string {
+function buildStaticRouteHtml(points: RoutePoint[], universidades: Universidade[]): string {
   const validPoints = [...points]
     .filter(p => {
       const lat = Number(p.latitude);
@@ -23,6 +26,15 @@ function buildStaticRouteHtml(points: RoutePoint[]): string {
       return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
     })
     .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+
+  const universidadesJson = JSON.stringify(
+    universidades.map((u) => ({
+      lat: u.latitude,
+      lng: u.longitude,
+      sigla: u.sigla,
+      nome: u.nome,
+    })),
+  );
 
   const pointsJson = JSON.stringify(
     validPoints.map((p, i) => ({
@@ -56,6 +68,7 @@ function buildStaticRouteHtml(points: RoutePoint[]): string {
       if (typeof L === 'undefined') return;
 
       var points = ${pointsJson};
+      var universidades = ${universidadesJson};
       var map = L.map('map', { zoomControl: true }).setView([-15.78, -47.93], 5);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -100,6 +113,39 @@ function buildStaticRouteHtml(points: RoutePoint[]): string {
         L.marker(latLng, { icon: icon }).addTo(map).bindPopup('<strong>' + point.name + '</strong>');
       });
 
+      universidades.forEach(function(uni) {
+        var uniHtml = [
+          '<div style="display:flex;flex-direction:column;align-items:center">',
+            '<div style="',
+              'background:#4C1D95;color:#fff;',
+              'font-size:11px;font-weight:700;letter-spacing:0.3px;',
+              'padding:3px 9px;border-radius:11px;',
+              'border:2px solid #fff;white-space:nowrap;',
+              'box-shadow:0 2px 8px rgba(0,0,0,0.4);',
+            '">&#127891; ' + uni.sigla + '</div>',
+            '<div style="',
+              'width:0;height:0;',
+              'border-left:6px solid transparent;',
+              'border-right:6px solid transparent;',
+              'border-top:9px solid #4C1D95;',
+              'margin-top:-1px;',
+            '"></div>',
+          '</div>',
+        ].join('');
+
+        var uniIcon = L.divIcon({
+          className: 'custom-pin',
+          html: uniHtml,
+          iconSize: [96, 40],
+          iconAnchor: [48, 40],
+          popupAnchor: [0, -42],
+        });
+
+        L.marker(L.latLng(uni.lat, uni.lng), { icon: uniIcon, zIndexOffset: 800 })
+          .addTo(map)
+          .bindPopup('<strong>' + uni.nome + '</strong>');
+      });
+
       if (latLngs.length >= 2) {
         L.polyline(latLngs, {
           color: '#4285F4',
@@ -123,18 +169,22 @@ function buildStaticRouteHtml(points: RoutePoint[]): string {
   `;
 }
 
-export default function StaticRouteMap({ pontosRota }: StaticRouteMapProps) {
+export default function StaticRouteMap({
+  pontosRota,
+  mostrarUniversidades = true,
+}: StaticRouteMapProps) {
   const [loading, setLoading] = useState(true);
+  const { universidades } = useUniversidades(mostrarUniversidades);
 
   const { html, webViewKey } = useMemo(() => {
     const keyParts = (pontosRota || []).map(
       p => `${p.id}-${p.latitude}-${p.longitude}-${p.ordem}`,
     );
     return {
-      html: buildStaticRouteHtml(pontosRota || []),
-      webViewKey: keyParts.join('|'),
+      html: buildStaticRouteHtml(pontosRota || [], universidades),
+      webViewKey: [...keyParts, `u:${universidades.length}`].join('|'),
     };
-  }, [pontosRota]);
+  }, [pontosRota, universidades]);
 
   return (
     <View style={styles.container}>

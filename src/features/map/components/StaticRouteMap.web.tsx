@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import type * as LeafletNS from 'leaflet';
 
+import { useUniversidades } from '../hooks/useUniversidades';
+
 type LeafletModule = typeof LeafletNS;
 type LeafletMap = LeafletNS.Map;
 
@@ -16,6 +18,7 @@ interface RoutePoint {
 
 interface StaticRouteMapProps {
   pontosRota: RoutePoint[];
+  mostrarUniversidades?: boolean;
 }
 
 type PreparedPoint = {
@@ -29,6 +32,7 @@ type PreparedPoint = {
 const START_COLOR = '#34A853';
 const END_COLOR = '#EA4335';
 const MID_COLOR = '#4285F4';
+const UNI_COLOR = '#4C1D95';
 
 function preparePoints(points: RoutePoint[]): PreparedPoint[] {
   const valid = [...(points || [])]
@@ -46,6 +50,27 @@ function preparePoints(points: RoutePoint[]): PreparedPoint[] {
     color: i === 0 ? START_COLOR : i === valid.length - 1 ? END_COLOR : MID_COLOR,
     name: p.nome || p.apelido || `Ponto ${i + 1}`,
   }));
+}
+
+function buildUniPinHtml(sigla: string): string {
+  return [
+    '<div style="display:flex;flex-direction:column;align-items:center">',
+    '<div style="',
+    `background:${UNI_COLOR};color:#fff;`,
+    'font-size:11px;font-weight:700;letter-spacing:0.3px;',
+    'padding:3px 9px;border-radius:11px;',
+    'border:2px solid #fff;white-space:nowrap;',
+    'box-shadow:0 2px 8px rgba(0,0,0,0.4);',
+    `">&#127891; ${sigla}</div>`,
+    '<div style="',
+    'width:0;height:0;',
+    'border-left:6px solid transparent;',
+    'border-right:6px solid transparent;',
+    `border-top:9px solid ${UNI_COLOR};`,
+    'margin-top:-1px;',
+    '"></div>',
+    '</div>',
+  ].join('');
 }
 
 function buildPinHtml(color: string, label: string): string {
@@ -70,7 +95,11 @@ function buildPinHtml(color: string, label: string): string {
   ].join('');
 }
 
-export default function StaticRouteMap({ pontosRota }: StaticRouteMapProps) {
+export default function StaticRouteMap({
+  pontosRota,
+  mostrarUniversidades = true,
+}: StaticRouteMapProps) {
+  const { universidades } = useUniversidades(mostrarUniversidades);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<LeafletMap | null>(null);
   const LRef = useRef<LeafletModule | null>(null);
@@ -127,6 +156,25 @@ export default function StaticRouteMap({ pontosRota }: StaticRouteMapProps) {
     layersRef.current.forEach((layer) => map.removeLayer(layer));
     layersRef.current = [];
 
+    universidades.forEach((uni) => {
+      const icon = L.divIcon({
+        className: 'custom-pin',
+        html: buildUniPinHtml(uni.sigla),
+        iconSize: [96, 40],
+        iconAnchor: [48, 40],
+        popupAnchor: [0, -42],
+      });
+
+      const marker = L.marker(L.latLng(uni.latitude, uni.longitude), {
+        icon,
+        zIndexOffset: 800,
+      })
+        .addTo(map)
+        .bindPopup(`<strong>${uni.nome}</strong>`);
+
+      layersRef.current.push(marker);
+    });
+
     if (points.length === 0) return;
 
     const latLngs = points.map((p) => L.latLng(p.lat, p.lng));
@@ -160,7 +208,7 @@ export default function StaticRouteMap({ pontosRota }: StaticRouteMapProps) {
     } else {
       map.setView(latLngs[0], 15);
     }
-  }, [mapReady, points]);
+  }, [mapReady, points, universidades]);
 
   return <div ref={containerRef} style={styles.container as React.CSSProperties} />;
 }

@@ -95,7 +95,10 @@ export type ViagemAgendaAlunoListResponse = Schemas['ViagemAgendaAlunoListRespon
 export type ViagemListQueryParams = ListAllViagens['parameters']['query'];
 
 // Instituicoes
-export type InstituicaoResponse = Schemas['InstituicaoResponse'];
+export type InstituicaoResponse = Schemas['InstituicaoResponse'] & {
+  latitude?: number | null;
+  longitude?: number | null;
+};
 export type InstituicaoListResponse = Schemas['InstituicaoListResponse'];
 export type InstituicaoCreateRequest = Schemas['InstituicaoCreateRequest'];
 export type InstituicaoEnderecoInput = Schemas['InstituicaoEnderecoInput'];
