@@ -5,11 +5,17 @@ import { WebView } from 'react-native-webview';
 
 import type { LocationMapProps } from '../types';
 import { useLeafletWebViewBridge } from '../hooks/useLeafletWebViewBridge';
-import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
+import { normalizeRoutePoints } from '../utils/points';
 
-export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapProps) {
-  const pontosValidos = useMemo(() => normalizeRoutePoints(pontosRota), [pontosRota]);
-  const destinoAtual = pontosValidos[0] ?? null;
+export default function LocationMap({
+  pontosRota,
+  posicaoOnibus,
+  proximaParadaId,
+  posicaoAluno,
+  margemSuperior = 0,
+  margemInferior = 0,
+}: LocationMapProps) {
+  const paradas = useMemo(() => normalizeRoutePoints(pontosRota), [pontosRota]);
 
   const {
     webViewRef,
@@ -23,19 +29,21 @@ export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapPro
     clearDestination,
     setUserMarker,
     clearUserMarker,
+    setStops,
+    setMargins,
     reloadKey,
   } = useLeafletWebViewBridge();
 
   useEffect(() => {
     if (!mapReady) return;
 
-    if (!destinoAtual) {
+    if (!posicaoOnibus) {
       clearDestination();
       return;
     }
 
-    setDestination(pointToLatLng(destinoAtual));
-  }, [mapReady, destinoAtual, clearDestination, setDestination]);
+    setDestination(posicaoOnibus);
+  }, [mapReady, posicaoOnibus, clearDestination, setDestination]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -47,6 +55,16 @@ export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapPro
 
     setUserMarker(posicaoAluno);
   }, [mapReady, posicaoAluno, clearUserMarker, setUserMarker]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    setStops(paradas, proximaParadaId);
+  }, [mapReady, paradas, proximaParadaId, setStops]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+    setMargins(margemSuperior, margemInferior);
+  }, [mapReady, margemSuperior, margemInferior, setMargins]);
 
   return (
     <View style={styles.container}>
@@ -88,9 +106,9 @@ export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapPro
 
 const styles = StyleSheet.create({
   container: {
-    height: 400,
+    flex: 1,
     width: '100%',
-    borderRadius: 10,
+    borderRadius: 0,
     backgroundColor: '#fff',
     overflow: 'hidden',
   },

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -47,6 +46,35 @@ try {
   }
 }
 
+type EstadoOnibus = 'movimento' | 'parado' | 'semSinal';
+
+// Distância mínima entre duas leituras para o ônibus contar como andando. Abaixo
+// disso é ruído de GPS: a viagem da demonstração anda uns 16 m entre leituras.
+const PARADO_M = 5;
+const SEM_SINAL_S = 60;
+
+export function estadoPorLeitura(
+  anterior: LatLng | null,
+  atual: LatLng,
+  atrasoS: number,
+): EstadoOnibus {
+  if (atrasoS > SEM_SINAL_S) return 'semSinal';
+  if (!anterior) return 'movimento';
+  const andou = haversineMetros(
+    anterior.latitude,
+    anterior.longitude,
+    atual.latitude,
+    atual.longitude,
+  );
+  return andou < PARADO_M ? 'parado' : 'movimento';
+}
+
+const ESTADOS: Record<EstadoOnibus, { texto: string; cor: string }> = {
+  movimento: { texto: 'Em movimento', cor: colors.success.main },
+  parado: { texto: 'Ônibus parado', cor: colors.warning.main },
+  semSinal: { texto: 'Sem sinal do ônibus', cor: colors.text.disabled },
+};
+
 function haversineMetros(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6_371_000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -66,6 +94,8 @@ function etaMinutos(distanciaMetros: number): number {
 
 const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
   const { rota, viagem } = route?.params || {};
+  const [alturaCabecalho, setAlturaCabecalho] = useState(0);
+  const [alturaPainel, setAlturaPainel] = useState(0);
 
   const [posicaoMotorista, setPosicaoMotorista] = useState<LatLng | null>(null);
   const [posicaoAluno, setPosicaoAluno] = useState<LatLng | null>(null);
@@ -73,6 +103,9 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
   const [distanciaMetros, setDistanciaMetros] = useState<number | null>(null);
   const [pontosRota, setPontosRota] = useState<PontoFlatResponse[]>([]);
   const [proximoPonto, setProximoPonto] = useState<PontoFlatResponse | null>(null);
+  const [estadoOnibus, setEstadoOnibus] = useState<EstadoOnibus>('semSinal');
+  const [mostrarEstado, setMostrarEstado] = useState(false);
+  const posicaoAnterior = useRef<LatLng | null>(null);
 
   const viagemId = (viagem?.id ?? viagem?.viagem_id) as string | undefined;
   const rotaId = rota?.id as string | undefined;
@@ -146,13 +179,17 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
     try {
       const dados = await motoristaService.obterLocalizacao(viagemId);
       const loc = dados as unknown as Record<string, number>;
-      setPosicaoMotorista({
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-      });
+      const nova = { latitude: loc.latitude, longitude: loc.longitude };
+      const enviadoEm = (dados as unknown as Record<string, string>).atualizado_em;
+      const atrasoS = enviadoEm ? (Date.now() - new Date(enviadoEm).getTime()) / 1000 : 0;
+      const anterior = posicaoAnterior.current;
+      posicaoAnterior.current = nova;
+      setPosicaoMotorista(nova);
+      setEstadoOnibus(estadoPorLeitura(anterior, nova, atrasoS));
       obterMinhaPosicao();
     } catch {
-      // keep showing last known position
+      // Mantém a última posição na tela, mas o selo passa a dizer que não há sinal.
+      setEstadoOnibus('semSinal');
     } finally {
       setLoading(false);
     }
@@ -200,10 +237,6 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
     );
   }
 
-  const pontosRotaMapa = posicaoMotorista
-    ? [{ latitude: posicaoMotorista.latitude, longitude: posicaoMotorista.longitude }]
-    : [];
-
   const etaParaOnibus =
     distanciaMetros != null ? etaMinutos(distanciaMetros) : null;
   const etaParaProximoPonto =
@@ -220,8 +253,41 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Mapa de fundo, ocupando a tela inteira */}
+      <View style={styles.mapaFundo}>
+        {loading ? (
+          <View style={styles.mapLoading}>
+            <ActivityIndicator size="large" color={colors.primary.main} />
+            <Text style={styles.mapLoadingText}>Buscando localização do ônibus...</Text>
+          </View>
+        ) : (
+          <LocationMap
+            pontosRota={pontosRota}
+            posicaoOnibus={posicaoMotorista}
+            proximaParadaId={
+              proximoPonto ? ((proximoPonto as Record<string, unknown>).id as string) : null
+            }
+            posicaoAluno={posicaoAluno}
+            margemSuperior={alturaCabecalho}
+            margemInferior={alturaPainel}
+          />
+        )}
+      </View>
+
+      {/* Estado do ônibus, sobre o mapa */}
+      <TouchableOpacity
+        style={[styles.bolhaEstado, { top: alturaCabecalho + 12 }]}
+        onPress={() => setMostrarEstado((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={`Estado: ${ESTADOS[estadoOnibus].texto}`}>
+        <View style={[styles.bolhaPonto, { backgroundColor: ESTADOS[estadoOnibus].cor }]} />
+        {mostrarEstado && <Text style={styles.bolhaTexto}>{ESTADOS[estadoOnibus].texto}</Text>}
+      </TouchableOpacity>
+
       {/* Header */}
-      <View style={styles.header}>
+      <View
+        style={styles.header}
+        onLayout={(e) => setAlturaCabecalho(e.nativeEvent.layout.height)}>
         <View style={styles.headerTop}>
           <TouchableOpacity
             style={styles.backButton}
@@ -242,37 +308,32 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
         </View>
       </View>
 
-      {/* Próximo ponto ETA chip (above map) */}
-      {proximoPonto && etaParaProximoPonto != null && (
-        <View
-          style={styles.etaChip}
-          accessible
-          accessibilityLabel={`Próximo ponto: ${(proximoPonto as Record<string, unknown>).apelido as string}, estimativa de ${etaParaProximoPonto} minutos`}>
-          <Icon name={IconNames.schedule} size="sm" color={colors.primary.dark} />
-          <Text style={styles.etaChipText}>
-            Próximo:{' '}
-            <Text style={styles.etaChipBold}>
-              {(proximoPonto as Record<string, unknown>).apelido as string}
-            </Text>
-            {'  '}~{etaParaProximoPonto} min
-          </Text>
-        </View>
-      )}
-
-      {/* Map */}
-      <View style={styles.mapaContainer}>
-        {loading ? (
-          <View style={styles.mapLoading}>
-            <ActivityIndicator size="large" color={colors.primary.main} />
-            <Text style={styles.mapLoadingText}>Buscando localização do ônibus...</Text>
-          </View>
-        ) : (
-          <LocationMap pontosRota={pontosRotaMapa} posicaoAluno={posicaoAluno} />
-        )}
-      </View>
-
       {/* Info Panel */}
-      <View style={styles.infoPanel}>
+      <View
+        style={styles.infoPanel}
+        onLayout={(e) => setAlturaPainel(e.nativeEvent.layout.height)}>
+        {/* Próxima parada, cabeçalho do painel */}
+        {proximoPonto && etaParaProximoPonto != null && (
+          <>
+            <View
+              style={styles.proximaParada}
+              accessible
+              accessibilityLabel={`Próxima parada: ${(proximoPonto as Record<string, unknown>).apelido as string}, estimativa de ${etaParaProximoPonto} minutos`}>
+              <View style={styles.proximaIcone}>
+                <Icon name={IconNames.location} size="md" color={colors.primary.main} />
+              </View>
+              <View style={styles.proximaTextos}>
+                <Text style={styles.proximaRotulo}>PRÓXIMA PARADA</Text>
+                <Text style={styles.proximaNome} numberOfLines={2}>
+                  {(proximoPonto as Record<string, unknown>).apelido as string}
+                </Text>
+              </View>
+              <Text style={styles.proximaEta}>~{etaParaProximoPonto} min</Text>
+            </View>
+            <View style={styles.divisorPainel} />
+          </>
+        )}
+
         {/* Distance & ETA to the bus */}
         <View style={styles.infoRow}>
           <View
@@ -318,52 +379,15 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
           </View>
         </View>
 
-        {/* Next stops list (compact) */}
-        {pontosRota.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.stopsScroll}
-            accessibilityLabel="Lista de pontos da rota">
-            {pontosRota.map((ponto, idx) => {
-              const pp = ponto as Record<string, unknown>;
-              const isNext =
-                proximoPonto &&
-                (proximoPonto as Record<string, unknown>).id === pp.id;
-              return (
-                <View
-                  key={pp.id as string}
-                  style={[styles.stopChip, isNext && styles.stopChipNext]}
-                  accessible
-                  accessibilityLabel={`Ponto ${idx + 1}: ${pp.apelido as string}${isNext ? ', próximo ponto' : ''}`}>
-                  <Text style={[styles.stopChipIdx, isNext && styles.stopChipIdxNext]}>
-                    {idx + 1}
-                  </Text>
-                  <Text
-                    style={[styles.stopChipLabel, isNext && styles.stopChipLabelNext]}
-                    numberOfLines={1}>
-                    {pp.apelido as string}
-                  </Text>
-                </View>
-              );
-            })}
-          </ScrollView>
-        )}
-
-        {/* Status badge */}
-        <View style={styles.statusContainer}>
-          <View style={styles.statusBadge}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Em movimento</Text>
-          </View>
-        </View>
       </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background.default },
+  // flex para o celular, height para o navegador: no web o container pai é
+  // display:block e o flex fica inerte, deixando a tela sem altura.
+  container: { flex: 1, height: '100%', backgroundColor: colors.background.default },
 
   header: {
     backgroundColor: colors.primary.dark,
@@ -400,27 +424,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  etaChip: {
+  proximaParada: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.base,
-    marginTop: spacing.sm,
-    marginBottom: -spacing.sm,
-    backgroundColor: colors.primary.lighter,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    alignSelf: 'flex-start',
-    zIndex: 10,
+    gap: spacing.md,
+    marginBottom: spacing.base,
   },
-  etaChipText: { ...textStyles.bodySmall, color: colors.primary.dark },
-  etaChipBold: { fontWeight: '700' },
+  proximaIcone: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary.lighter,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Sem flex aqui o nome longo empurra o tempo para fora da tela.
+  proximaTextos: { flex: 1 },
+  proximaRotulo: {
+    ...textStyles.caption,
+    color: colors.text.secondary,
+    letterSpacing: 0.6,
+    marginBottom: spacing.xxs,
+  },
+  proximaNome: { ...textStyles.body, color: colors.text.primary, fontWeight: '600' },
+  proximaEta: { ...textStyles.h3, color: colors.primary.main },
+  divisorPainel: {
+    height: 1,
+    backgroundColor: colors.border.light,
+    marginBottom: spacing.base,
+  },
 
-  mapaContainer: {
-    flex: 1,
+  mapaFundo: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.neutral[100],
-    overflow: 'hidden',
   },
   mapLoading: {
     flex: 1,
@@ -431,8 +467,15 @@ const styles = StyleSheet.create({
   mapLoadingText: { ...textStyles.body, color: colors.text.secondary },
 
   infoPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    // O padding de baixo é maior de propósito: em telefone a barra de navegação
+    // do sistema come uns pixels da borda, e sem folga o selo de status some.
     backgroundColor: colors.background.paper,
     padding: spacing.lg,
+    paddingBottom: spacing.xl,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
     ...shadows.lg,
@@ -456,58 +499,21 @@ const styles = StyleSheet.create({
   infoValue: { ...textStyles.h3, color: colors.primary.main },
   infoDivider: { width: 1, backgroundColor: colors.border.light, marginHorizontal: spacing.base },
 
-  // Next stops strip
-  stopsScroll: {
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  stopChip: {
+  bolhaEstado: {
+    position: 'absolute',
+    left: spacing.base,
+    zIndex: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.background.default,
+    backgroundColor: colors.background.paper,
     borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    maxWidth: 140,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    ...shadows.md,
   },
-  stopChipNext: {
-    backgroundColor: colors.primary.main,
-    borderColor: colors.primary.main,
-  },
-  stopChipIdx: {
-    ...textStyles.caption,
-    color: colors.text.secondary,
-    fontWeight: '700',
-    minWidth: 16,
-    textAlign: 'center',
-  },
-  stopChipIdxNext: { color: colors.text.inverse },
-  stopChipLabel: { ...textStyles.caption, color: colors.text.secondary, flex: 1 },
-  stopChipLabelNext: { color: colors.text.inverse, fontWeight: '600' },
-
-  statusContainer: { alignItems: 'center' },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.success.light,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.success.main,
-    marginRight: spacing.sm,
-  },
-  statusText: { ...textStyles.bodySmall, color: colors.success.dark, fontWeight: '600' },
-
+  bolhaPonto: { width: 12, height: 12, borderRadius: 6 },
+  bolhaTexto: { ...textStyles.caption, color: colors.text.secondary },
   emptyContent: {
     flex: 1,
     justifyContent: 'center',
