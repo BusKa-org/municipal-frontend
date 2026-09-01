@@ -6,15 +6,12 @@ export async function requestLocationPermission(): Promise<boolean> {
     return true;
   }
 
-  const granted = await PermissionsAndroid.request(
+  // No Android 12 em diante o diálogo oferece "Precisa" e "Aproximada". Quem
+  // escolhe aproximada concede apenas COARSE, e pedir só FINE daria negado.
+  const resultado = await PermissionsAndroid.requestMultiple([
     PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-    {
-      title: 'Permissão de localização',
-      message: 'O BusKá precisa da sua localização para mostrar a rota.',
-      buttonPositive: 'Permitir',
-      buttonNegative: 'Negar',
-    }
-  );
+    PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+  ]);
 
-  return granted === PermissionsAndroid.RESULTS.GRANTED;
+  return Object.values(resultado).includes(PermissionsAndroid.RESULTS.GRANTED);
 }
