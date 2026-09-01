@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { TILE_ATTRIBUTION, TILE_MAX_ZOOM, TILE_URL } from '../utils/tiles';
 
 export interface PickerLatLng {
   latitude: number;
@@ -55,9 +56,9 @@ function buildPickerHtml(initial?: PickerLatLng): string {
 
       var map = L.map('map', { zoomControl: true }).setView([${lat}, ${lng}], ${zoom});
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
+      L.tileLayer('${TILE_URL}', {
+        attribution: '${TILE_ATTRIBUTION}',
+        maxZoom: ${TILE_MAX_ZOOM},
       }).addTo(map);
 
       var pinHtml = [

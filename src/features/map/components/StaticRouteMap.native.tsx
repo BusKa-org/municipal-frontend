@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { TILE_ATTRIBUTION, TILE_MAX_ZOOM, TILE_URL } from '../utils/tiles';
 
 interface RoutePoint {
   id?: string | number;
@@ -58,9 +59,9 @@ function buildStaticRouteHtml(points: RoutePoint[]): string {
       var points = ${pointsJson};
       var map = L.map('map', { zoomControl: true }).setView([-15.78, -47.93], 5);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
+      L.tileLayer('${TILE_URL}', {
+        attribution: '${TILE_ATTRIBUTION}',
+        maxZoom: ${TILE_MAX_ZOOM},
       }).addTo(map);
 
       var latLngs = [];

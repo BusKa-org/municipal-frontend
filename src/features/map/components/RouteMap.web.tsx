@@ -6,6 +6,7 @@ import type { LatLng, RouteMapProps } from '../types';
 import { useRoutePolyline } from '../hooks/useRoutePolyline';
 import { useArrivalDetection } from '../hooks/useArrivalDetection';
 import { normalizeRoutePoints, pointToLatLng, buildFitCoordinates } from '../utils/points';
+import { TILE_ATTRIBUTION, TILE_MAX_ZOOM, TILE_URL } from '../utils/tiles';
 
 type LeafletModule = typeof LeafletNS;
 type LeafletMap = LeafletNS.Map;
@@ -66,10 +67,9 @@ export default function RouteMap({ pontosRota, onPontoChegado }: RouteMapProps) 
 
       const map = L.map(mapRef.current).setView([-23.55, -46.63], 13);
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
+      L.tileLayer(TILE_URL, {
+        attribution: TILE_ATTRIBUTION,
+        maxZoom: TILE_MAX_ZOOM,
       }).addTo(map);
 
       mapInstance.current = map;
