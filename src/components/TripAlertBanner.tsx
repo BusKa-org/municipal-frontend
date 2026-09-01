@@ -64,13 +64,23 @@ const TripAlertBanner: React.FC<TripAlertBannerProps> = ({
   const translateY = useRef(new Animated.Value(-80)).current;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Keep the latest onDismiss in a ref. Callers usually pass an inline arrow
+  // (e.g. `onDismiss={() => setAlert(null)}`), which changes identity on every
+  // render. Depending on it directly would re-run the effect below on each
+  // render, clearing and restarting the auto-dismiss timer forever, so the
+  // banner would never dismiss and would keep covering the screen (zIndex 999).
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+
   const slideOut = useCallback(() => {
     Animated.timing(translateY, {
       toValue: -80,
       duration: 250,
       useNativeDriver: true,
-    }).start(() => onDismiss());
-  }, [translateY, onDismiss]);
+    }).start(() => onDismissRef.current?.());
+  }, [translateY]);
 
   useEffect(() => {
     if (!alert) return;

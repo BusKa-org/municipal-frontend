@@ -28,6 +28,18 @@ module.exports = {
     hot: true,
     open: true,
     historyApiFallback: true, // Crucial for React Navigation
+
+    // Proxy das chamadas de API para o backend. O browser fala sempre com a
+    // mesma origem (localhost:3000), entao o CORS nao se aplica. Sem isso, a
+    // API em producao rejeita o browser, ja que CORS_ORIGINS nao esta definido.
+    // Apenas desenvolvimento: o app nativo chama a API direto.
+    proxy: [
+      {
+        context: ['/v1'],
+        target: process.env.API_PROXY_TARGET || 'http://buska.lsd.ufcg.edu.br:5000',
+        changeOrigin: true,
+      },
+    ],
   },
 
   output: {
