@@ -106,6 +106,8 @@ export function buildLeafletHtml(): string {
             } else {
               this.destMarker = L.marker(latLng).addTo(this.mapInstance);
             }
+
+            this.mapInstance.setView(latLng, this.mapInstance.getZoom());
           },
   
           clearDestination() {
