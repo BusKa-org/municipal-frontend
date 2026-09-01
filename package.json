@@ -1,6 +1,6 @@
 {
   "name": "buska",
-  "version": "1.0.3-beta",
+  "version": "1.0.4-beta",
   "private": true,
   "scripts": {
     "postinstall": "patch-package",

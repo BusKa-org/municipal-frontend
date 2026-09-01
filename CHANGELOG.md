@@ -3,6 +3,29 @@
 Todas as novidades, melhorias e correções do BusKá são registradas aqui.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.4-beta] — 2026-09-01
+
+### Novidades
+
+- **Paradas da rota no mapa** — As paradas aparecem como círculos numerados, azul na próxima e cinza nas demais. Tocar no número abre o nome da parada
+- **Estado do ônibus** — Bolinha no canto do mapa que muda de cor entre movimento, ônibus parado e sem sinal, e revela o significado ao toque
+
+### Melhorias
+
+- Mapa da tela de localização passa a ocupar o fundo da tela inteira, sem a faixa vazia entre o mapa e o painel
+- Na primeira abertura o mapa enquadra a rota inteira. Antes abria num zoom que mostrava 7 km, deixando uma rota curta ilegível
+- Controles de zoom respeitam o cabeçalho e o painel, o que também mantém a atribuição do OpenStreetMap sempre visível
+- O bloco da próxima parada virou o cabeçalho do painel, na mesma linguagem visual das métricas
+
+### Correções
+
+- **Ônibus parado no mapa do celular** — `LocationMap.native` ignorava a posição do ônibus e fixava o marcador na primeira parada da rota. O ícone não saía do lugar durante a viagem inteira, e a posição do aluno nunca era desenhada
+- **Tela derrubada ao abrir aluno pelo gestor** — `useApi` estourava quando recebia `null` na lista de dependências, que era o que `DetalheAlunoGestor` mandava
+- **Banner de alerta que não sumia** — O temporizador de dispensa reiniciava a cada render, então o banner ficava cobrindo a tela com `zIndex: 999`
+- **Link de download da landing page** — Toda release passa a levar um `buska.apk` de nome fixo, que era anexado na mão a cada versão
+
+---
+
 ## [1.0.0-beta] — 2026-04-11
 
 ### Novidades
