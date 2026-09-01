@@ -267,7 +267,7 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
             <Text style={styles.mapLoadingText}>Buscando localização do ônibus...</Text>
           </View>
         ) : (
-          <LocationMap pontosRota={pontosRotaMapa} />
+          <LocationMap pontosRota={pontosRotaMapa} posicaoAluno={posicaoAluno} />
         )}
       </View>
 
