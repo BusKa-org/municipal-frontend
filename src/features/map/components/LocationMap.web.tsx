@@ -9,11 +9,12 @@ type LeafletModule = typeof LeafletNS;
 type LeafletMap = LeafletNS.Map;
 type LeafletMarker = LeafletNS.Marker;
 
-export default function LocationMap({ pontosRota }: LocationMapProps) {
+export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<LeafletMap | null>(null);
   const LRef = useRef<LeafletModule | null>(null);
   const destMarkerRef = useRef<LeafletMarker | null>(null);
+  const alunoMarkerRef = useRef<LeafletMarker | null>(null);
 
   const [mapReady, setMapReady] = useState(false);
   const [loadingMap, setLoadingMap] = useState(true);
@@ -89,11 +90,49 @@ export default function LocationMap({ pontosRota }: LocationMapProps) {
     if (destMarkerRef.current) {
       destMarkerRef.current.setLatLng(latLng);
     } else {
-      destMarkerRef.current = L.marker(latLng).addTo(map);
+      destMarkerRef.current = L.marker(latLng, {
+        icon: L.divIcon({
+          className: 'onibus-icon',
+          html: '<div style="font-size:26px;line-height:32px;text-align:center;">&#128652;</div>',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        }),
+      }).addTo(map);
     }
 
     map.setView(latLng, map.getZoom());
   }, [mapReady, destinationLatLng]);
+
+  useEffect(() => {
+    if (!mapReady || !mapInstance.current || !LRef.current) return;
+    const map = mapInstance.current;
+    const L = LRef.current;
+
+    if (!posicaoAluno) {
+      if (alunoMarkerRef.current) {
+        map.removeLayer(alunoMarkerRef.current);
+        alunoMarkerRef.current = null;
+      }
+      return;
+    }
+
+    const latLng = L.latLng(posicaoAluno.latitude, posicaoAluno.longitude);
+
+    if (alunoMarkerRef.current) {
+      alunoMarkerRef.current.setLatLng(latLng);
+      return;
+    }
+
+    alunoMarkerRef.current = L.marker(latLng, {
+      icon: L.divIcon({
+        className: 'aluno-icon',
+        html: '<div style="width:16px;height:16px;background:#2196F3;border:3px solid white;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.5);"></div>',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      }),
+      zIndexOffset: 1000,
+    }).addTo(map);
+  }, [mapReady, posicaoAluno]);
 
   return (
     <View style={styles.container}>

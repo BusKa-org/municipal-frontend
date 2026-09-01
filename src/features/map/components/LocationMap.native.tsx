@@ -7,7 +7,7 @@ import type { LocationMapProps } from '../types';
 import { useLeafletWebViewBridge } from '../hooks/useLeafletWebViewBridge';
 import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
 
-export default function LocationMap({ pontosRota }: LocationMapProps) {
+export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapProps) {
   const pontosValidos = useMemo(() => normalizeRoutePoints(pontosRota), [pontosRota]);
   const destinoAtual = pontosValidos[0] ?? null;
 
@@ -21,6 +21,8 @@ export default function LocationMap({ pontosRota }: LocationMapProps) {
     reloadMap,
     setDestination,
     clearDestination,
+    setUserMarker,
+    clearUserMarker,
     reloadKey,
   } = useLeafletWebViewBridge();
 
@@ -34,6 +36,17 @@ export default function LocationMap({ pontosRota }: LocationMapProps) {
 
     setDestination(pointToLatLng(destinoAtual));
   }, [mapReady, destinoAtual, clearDestination, setDestination]);
+
+  useEffect(() => {
+    if (!mapReady) return;
+
+    if (!posicaoAluno) {
+      clearUserMarker();
+      return;
+    }
+
+    setUserMarker(posicaoAluno);
+  }, [mapReady, posicaoAluno, clearUserMarker, setUserMarker]);
 
   return (
     <View style={styles.container}>
