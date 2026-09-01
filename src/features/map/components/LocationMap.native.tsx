@@ -55,7 +55,8 @@ export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapPro
         ref={webViewRef}
         style={[styles.webview, mapError && styles.hidden]}
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html, baseUrl: 'https://buska.projeto1.lsd.ufcg.edu.br' }}
+        userAgent="BusKa/1.0.0-beta (React Native; OpenStreetMap tile client, contact: contato.buska@gmail.com)"
         javaScriptEnabled
         domStorageEnabled
         scrollEnabled={false}
