@@ -251,8 +251,14 @@ jobs:
             NEW_NAME="buska-${{ env.VERSION }}.apk"
             mv "$ORIGINAL_APK" "$NEW_NAME"
 
+            # Copia de nome fixo. A landing page aponta para
+            # releases/latest/download/buska.apk, que so resolve se existir um
+            # asset com esse nome exato em toda release.
+            cp "$NEW_NAME" buska.apk
+
             echo "APK_SIZE=$(du -sh "$NEW_NAME" | cut -f1)" >> $GITHUB_ENV
             echo "ARTIFACT_PATH=$(pwd)/$NEW_NAME" >> $GITHUB_ENV
+            echo "ARTIFACT_PATH_FIXO=$(pwd)/buska.apk" >> $GITHUB_ENV
           else
             echo "❌ APK not found!"
             exit 1
@@ -268,7 +274,9 @@ jobs:
         if: inputs.CREATE_GITHUB_RELEASE == true
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ env.ARTIFACT_PATH }}
+          files: |
+            ${{ env.ARTIFACT_PATH }}
+            ${{ env.ARTIFACT_PATH_FIXO }}
           body_path: CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
