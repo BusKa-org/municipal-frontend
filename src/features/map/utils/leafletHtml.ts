@@ -20,6 +20,7 @@ export function buildLeafletHtml(): string {
       body { overflow: hidden; }
       .leaflet-container { width: 100%; height: 100%; background: #f5f5f5; }
       .motorista-icon { background: transparent; border: none; }
+      .onibus-icon { background: transparent; border: none; }
   
       #error-msg {
         display: none;
@@ -104,7 +105,13 @@ export function buildLeafletHtml(): string {
             if (this.destMarker) {
               this.destMarker.setLatLng(latLng);
             } else {
-              this.destMarker = L.marker(latLng).addTo(this.mapInstance);
+              const icon = L.divIcon({
+                className: 'onibus-icon',
+                html: '<div style="font-size:26px;line-height:32px;text-align:center;">&#128652;</div>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+              });
+              this.destMarker = L.marker(latLng, { icon }).addTo(this.mapInstance);
             }
 
             this.mapInstance.setView(latLng, this.mapInstance.getZoom());
