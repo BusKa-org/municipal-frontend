@@ -1,6 +1,12 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+
+// Surface async failures that never reach a render boundary.
+window.addEventListener('unhandledrejection', event => {
+  console.error('[unhandledrejection]', event.reason);
+});
 
 const rootElement = document.getElementById('app-root');
 
@@ -9,7 +15,11 @@ if (!rootElement) {
 } else {
   try {
     const root = createRoot(rootElement);
-    root.render(<App />);
+    root.render(
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>,
+    );
   } catch (error: unknown) {
     console.error('Fatal Error during Web Rendering:', error);
 

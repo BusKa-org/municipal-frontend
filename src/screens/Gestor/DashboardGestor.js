@@ -24,6 +24,7 @@ import {
 } from '../../theme';
 import Icon, { IconNames } from '../../components/Icon';
 import { useToast } from '../../components/Toast';
+import { confirmAction } from '../../utils/confirm';
 
 const GESTOR_COLOR = colors.roles.gestor;
 const GESTOR_DARK  = colors.accent.dark;
@@ -172,18 +173,14 @@ const DashboardGestor = ({ navigation }) => {
   const toast = useToast();
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sair',
-      'Deseja encerrar sua sessão?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: () => logout(),
-        },
-      ],
-    );
+    confirmAction({
+      title: 'Sair',
+      message: 'Deseja encerrar sua sessão?',
+      confirmText: 'Sair',
+      cancelText: 'Cancelar',
+      destructive: true,
+      onConfirm: () => logout(),
+    });
   };
 
   const [loadingCounts, setLoadingCounts] = useState(true);
