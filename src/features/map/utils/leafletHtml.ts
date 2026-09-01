@@ -22,6 +22,7 @@ export function buildLeafletHtml(): string {
       .leaflet-container { width: 100%; height: 100%; background: #f5f5f5; }
       .motorista-icon { background: transparent; border: none; }
       .onibus-icon { background: transparent; border: none; }
+      .parada-icon { background: transparent; border: none; }
   
       #error-msg {
         display: none;
@@ -77,19 +78,29 @@ export function buildLeafletHtml(): string {
         if (typeof L === 'undefined') return;
         clearTimeout(loadTimeout);
   
+        function escaparHtml(texto) {
+          return String(texto).replace(/[&<>"]/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+          });
+        }
+
         const BuskaMap = {
           mapInstance: null,
           userMarker: null,
           destMarker: null,
           routeLine: null,
+          stopMarkers: [],
+          enquadrou: false,
   
           init() {
             if (this.mapInstance) return;
   
             this.mapInstance = L.map('map', {
-              zoomControl: true,
+              zoomControl: false,
               preferCanvas: false,
             }).setView([-23.55, -46.63], 13);
+
+            L.control.zoom({ position: 'topright' }).addTo(this.mapInstance);
   
             L.tileLayer('${TILE_URL}', {
               attribution: '${TILE_ATTRIBUTION}',
@@ -152,6 +163,62 @@ export function buildLeafletHtml(): string {
             }
           },
   
+          setStops(paradas, proximaId) {
+            if (!this.mapInstance) return;
+
+            (this.stopMarkers || []).forEach(function (m) {
+              BuskaMap.mapInstance.removeLayer(m);
+            });
+            this.stopMarkers = [];
+
+            if (!Array.isArray(paradas) || !paradas.length) return;
+
+            paradas.forEach(function (parada, i) {
+              var cor = parada.id === proximaId ? '#1565C0' : '#90A4AE';
+              var icon = L.divIcon({
+                className: 'parada-icon',
+                html:
+                  '<div style="width:22px;height:22px;border-radius:50%;display:flex;' +
+                  'align-items:center;justify-content:center;font:700 12px sans-serif;' +
+                  'border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.4);background:' +
+                  cor + ';color:#fff;">' + (i + 1) + '</div>',
+                iconSize: [22, 22],
+                iconAnchor: [11, 11],
+              });
+              var marcador = L.marker([parada.latitude, parada.longitude], { icon })
+                .addTo(BuskaMap.mapInstance);
+              // Popup em vez de tooltip: tooltip depende de passar o mouse, que
+              // não existe em tela de toque.
+              marcador.bindPopup(
+                '<b>' + (i + 1) + '.</b> ' + escaparHtml(parada.apelido || 'Parada ' + (i + 1)),
+                { closeButton: false, offset: [0, -6] }
+              );
+              BuskaMap.stopMarkers.push(marcador);
+            });
+
+            // Na primeira vez enquadra a rota inteira. Sem isso o mapa abre no
+            // zoom 13, que mostra 7 km, e uma rota de 600 m vira um borrão.
+            if (!this.enquadrou && paradas.length > 1) {
+              this.mapInstance.fitBounds(
+                paradas.map(function (p) { return [p.latitude, p.longitude]; }),
+                { padding: [40, 40] }
+              );
+              this.enquadrou = true;
+            }
+          },
+
+          setMargins(topo, base) {
+            // O Leaflet cria uma faixa por canto: .leaflet-top vem em left e
+            // right, e .leaflet-bottom também. Mexer só na primeira deixa a
+            // atribuição escondida atrás do painel.
+            var ajustar = function (seletor, prop, valor) {
+              var faixas = document.querySelectorAll(seletor);
+              for (var i = 0; i < faixas.length; i++) faixas[i].style[prop] = valor + 'px';
+            };
+            ajustar('.leaflet-top', 'marginTop', topo + 8);
+            ajustar('.leaflet-bottom', 'marginBottom', base + 4);
+          },
+
           setRoute(coords) {
             if (!this.mapInstance) return;
   

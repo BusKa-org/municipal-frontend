@@ -3,32 +3,35 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import type * as LeafletNS from 'leaflet';
 
 import type { LocationMapProps } from '../types';
-import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
+import { normalizeRoutePoints } from '../utils/points';
 import { TILE_ATTRIBUTION, TILE_MAX_ZOOM, TILE_URL } from '../utils/tiles';
 
 type LeafletModule = typeof LeafletNS;
 type LeafletMap = LeafletNS.Map;
 type LeafletMarker = LeafletNS.Marker;
 
-export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapProps) {
+export default function LocationMap({
+  pontosRota,
+  posicaoOnibus,
+  proximaParadaId,
+  posicaoAluno,
+  margemSuperior = 0,
+  margemInferior = 0,
+}: LocationMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<LeafletMap | null>(null);
   const LRef = useRef<LeafletModule | null>(null);
   const destMarkerRef = useRef<LeafletMarker | null>(null);
   const alunoMarkerRef = useRef<LeafletMarker | null>(null);
+  const paradasRef = useRef<LeafletMarker[]>([]);
+  const enquadrouRef = useRef(false);
 
   const [mapReady, setMapReady] = useState(false);
   const [loadingMap, setLoadingMap] = useState(true);
 
-  const destinoAtual = useMemo(() => {
-    return normalizeRoutePoints(pontosRota)[0] ?? null;
-  }, [pontosRota]);
+  const paradas = useMemo(() => normalizeRoutePoints(pontosRota), [pontosRota]);
 
-  const destinationLatLng = useMemo(
-    () => (destinoAtual ? pointToLatLng(destinoAtual) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [destinoAtual?.id, destinoAtual?.latitude, destinoAtual?.longitude],
-  );
+  const destinationLatLng = posicaoOnibus ?? null;
 
   // ─── Map initialisation ───────────────────────────────────────────────────
 
@@ -44,7 +47,9 @@ export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapPro
 
       if (!mounted || !mapRef.current) return;
 
-      const map = L.map(mapRef.current, { zoomControl: true }).setView([-23.55, -46.63], 13);
+      // Zoom à direita: o canto de cima à esquerda é do selo de estado do ônibus.
+      const map = L.map(mapRef.current, { zoomControl: false }).setView([-23.55, -46.63], 13);
+      L.control.zoom({ position: 'topright' }).addTo(map);
 
       L.tileLayer(TILE_URL, {
         attribution: TILE_ATTRIBUTION,
@@ -134,6 +139,60 @@ export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapPro
     }).addTo(map);
   }, [mapReady, posicaoAluno]);
 
+  useEffect(() => {
+    if (!mapReady || !mapInstance.current || !LRef.current) return;
+    const map = mapInstance.current;
+    const L = LRef.current;
+
+    paradasRef.current.forEach((m) => map.removeLayer(m));
+    paradasRef.current = [];
+
+    paradas.forEach((parada, i) => {
+      const proxima = parada.id === proximaParadaId;
+      const marcador = L.marker(L.latLng(parada.latitude, parada.longitude), {
+        icon: L.divIcon({
+          className: 'parada-icon',
+          html:
+            '<div style="width:22px;height:22px;border-radius:50%;display:flex;' +
+            'align-items:center;justify-content:center;font:700 12px sans-serif;' +
+            'border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.4);background:' +
+            (proxima ? '#1565C0' : '#90A4AE') + ';color:#fff;">' + (i + 1) + '</div>',
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
+        }),
+      }).addTo(map);
+      // Popup em vez de tooltip: tooltip depende de passar o mouse, que não
+      // existe em tela de toque.
+      marcador.bindPopup(
+        '<b>' + (i + 1) + '.</b> ' + (parada.apelido ?? 'Parada ' + (i + 1)),
+        { closeButton: false, offset: [0, -6] },
+      );
+      paradasRef.current.push(marcador);
+    });
+
+    // Na primeira vez, enquadra a rota inteira. Sem isso o mapa abre no zoom
+    // 13, que mostra 7 km, e uma rota de 600 m vira um amontoado de pontos.
+    if (!enquadrouRef.current && paradas.length > 1) {
+      map.fitBounds(
+        paradas.map((p) => [p.latitude, p.longitude] as [number, number]),
+        { padding: [40, 40] },
+      );
+      enquadrouRef.current = true;
+    }
+  }, [mapReady, paradas, proximaParadaId]);
+
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    // O Leaflet cria uma faixa por canto: .leaflet-top vem em left e right, e
+    // .leaflet-bottom também. Mexer só na primeira deixa a atribuição escondida.
+    mapRef.current.querySelectorAll<HTMLElement>('.leaflet-top').forEach((el) => {
+      el.style.marginTop = `${margemSuperior + 8}px`;
+    });
+    mapRef.current.querySelectorAll<HTMLElement>('.leaflet-bottom').forEach((el) => {
+      el.style.marginBottom = `${margemInferior + 4}px`;
+    });
+  }, [mapReady, margemSuperior, margemInferior]);
+
   return (
     <View style={styles.container}>
       <div ref={mapRef} style={styles.map as React.CSSProperties} />
@@ -149,16 +208,18 @@ export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapPro
 
 const styles = StyleSheet.create({
   container: {
-    height: 400,
+    flex: 1,
     width: '100%',
-    borderRadius: 10,
+    borderRadius: 0,
     backgroundColor: '#fff',
     overflow: 'hidden',
   },
   map: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 10,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

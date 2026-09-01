@@ -2,7 +2,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { buildLeafletHtml } from '../utils/leafletHtml';
-import type { LatLng } from '../types';
+import type { LatLng, NormalizedRoutePoint } from '../types';
 
 type Result = {
   webViewRef: React.MutableRefObject<any>;
@@ -19,6 +19,8 @@ type Result = {
   setRoute: (coords: LatLng[]) => void;
   clearRoute: () => void;
   fitToCoordinates: (coords: LatLng[]) => void;
+  setStops: (paradas: NormalizedRoutePoint[], proximaId?: string | null) => void;
+  setMargins: (topo: number, base: number) => void;
   reloadKey: number;
 };
 
@@ -103,6 +105,22 @@ export function useLeafletWebViewBridge(): Result {
     inject(`window.BuskaMap.clearRoute();`);
   }, [inject]);
 
+  const setStops = useCallback(
+    (paradas: NormalizedRoutePoint[], proximaId?: string | null) => {
+      inject(
+        `window.BuskaMap.setStops(${JSON.stringify(paradas)}, ${JSON.stringify(proximaId ?? null)});`,
+      );
+    },
+    [inject],
+  );
+
+  const setMargins = useCallback(
+    (topo: number, base: number) => {
+      inject(`window.BuskaMap.setMargins(${topo}, ${base});`);
+    },
+    [inject],
+  );
+
   const fitToCoordinates = useCallback(
     (coords: LatLng[]) => {
       inject(`window.BuskaMap.fitToCoordinates(${JSON.stringify(coords)});`);
@@ -125,6 +143,8 @@ export function useLeafletWebViewBridge(): Result {
     setRoute,
     clearRoute,
     fitToCoordinates,
+    setStops,
+    setMargins,
     reloadKey,
   };
 }
