@@ -22,6 +22,7 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - **Ônibus parado no mapa do celular** — `LocationMap.native` ignorava a posição do ônibus e fixava o marcador na primeira parada da rota. O ícone não saía do lugar durante a viagem inteira, e a posição do aluno nunca era desenhada
 - **Tela derrubada ao abrir aluno pelo gestor** — `useApi` estourava quando recebia `null` na lista de dependências, que era o que `DetalheAlunoGestor` mandava
 - **Banner de alerta que não sumia** — O temporizador de dispensa reiniciava a cada render, então o banner ficava cobrindo a tela com `zIndex: 999`
+- **Card da próxima viagem ilegível** — O card foi desenhado para fundo escuro e estava com fundo azul claro. O horário e o nome da rota, ambos brancos, davam contraste de 1.22:1 sobre ele. O card inteiro sumia
 - **Link de download da landing page** — Toda release passa a levar um `buska.apk` de nome fixo, que era anexado na mão a cada versão
 
 ---

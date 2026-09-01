@@ -423,7 +423,7 @@ const DashboardAluno: React.FC<Props> = ({ navigation }) => {
               <Icon
                 name={IconNames.schedule}
                 size="md"
-                color={colors.secondary.light}
+                color={colors.primary.lighter}
                 accessibilityElementsHidden
               />
               <Text style={styles.cardTitle}>Próxima Viagem</Text>
@@ -739,7 +739,10 @@ const styles = StyleSheet.create({
     margin: spacing.base,
     marginTop: -spacing.xl,
     padding: spacing.lg,
-    backgroundColor: colors.primary.lighter,
+    // Fundo escuro de proposito: o conteudo do card e todo branco ou quase
+    // (capacityText em rgba(255,255,255,.8), barTrack em .25). Sobre o azul
+    // claro anterior o cartao inteiro sumia.
+    backgroundColor: colors.primary.dark,
     borderRadius: borderRadius.xl,
     ...shadows.lg,
   },
@@ -754,7 +757,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     ...textStyles.caption,
-    color: colors.secondary.light,
+    color: colors.primary.lighter,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -791,7 +794,7 @@ const styles = StyleSheet.create({
   },
   viagemTipo: {
     ...textStyles.bodySmall,
-    color: colors.secondary.lighter,
+    color: colors.primary.lighter,
     marginBottom: spacing.sm,
   },
   verDetalhesButton: {
