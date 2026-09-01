@@ -1,4 +1,5 @@
 // src/components/map/utils/leafletHtml.ts
+import { TILE_ATTRIBUTION, TILE_MAX_ZOOM, TILE_URL } from './tiles';
 export function buildLeafletHtml(): string {
     return `
   <!doctype html>
@@ -90,9 +91,9 @@ export function buildLeafletHtml(): string {
               preferCanvas: false,
             }).setView([-23.55, -46.63], 13);
   
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-              maxZoom: 19,
+            L.tileLayer('${TILE_URL}', {
+              attribution: '${TILE_ATTRIBUTION}',
+              maxZoom: ${TILE_MAX_ZOOM},
             }).addTo(this.mapInstance);
   
             postMessage({ type: 'mapReady' });

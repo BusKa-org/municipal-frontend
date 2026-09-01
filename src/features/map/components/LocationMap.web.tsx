@@ -4,6 +4,7 @@ import type * as LeafletNS from 'leaflet';
 
 import type { LocationMapProps } from '../types';
 import { normalizeRoutePoints, pointToLatLng } from '../utils/points';
+import { TILE_ATTRIBUTION, TILE_MAX_ZOOM, TILE_URL } from '../utils/tiles';
 
 type LeafletModule = typeof LeafletNS;
 type LeafletMap = LeafletNS.Map;
@@ -45,10 +46,9 @@ export default function LocationMap({ pontosRota, posicaoAluno }: LocationMapPro
 
       const map = L.map(mapRef.current, { zoomControl: true }).setView([-23.55, -46.63], 13);
 
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
+      L.tileLayer(TILE_URL, {
+        attribution: TILE_ATTRIBUTION,
+        maxZoom: TILE_MAX_ZOOM,
       }).addTo(map);
 
       mapInstance.current = map;
