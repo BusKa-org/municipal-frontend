@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -15,6 +15,7 @@ import Icon, { IconNames } from '../../components/Icon';
 import { motoristaService } from '../../services/motoristaService';
 import { alunoService } from '../../services';
 import { LocationMap } from '../../features/map/index';
+import { requestLocationPermission } from '../../features/map/hooks/useLocationPermission';
 import { unwrapItems } from '../../types';
 import type { PontoFlatResponse } from '../../types';
 
@@ -110,8 +111,16 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
     setProximoPonto(nearest.ponto);
   }, [posicaoMotorista, pontosRota]);
 
+  const localizacaoPermitida = useRef(false);
+
+  useEffect(() => {
+    requestLocationPermission().then((ok) => {
+      localizacaoPermitida.current = ok;
+    });
+  }, []);
+
   const obterMinhaPosicao = useCallback(() => {
-    if (!Geolocation) return;
+    if (!Geolocation || !localizacaoPermitida.current) return;
     Geolocation.getCurrentPosition(
       (pos) => {
         setPosicaoAluno({
