@@ -413,7 +413,10 @@ const DashboardAluno: React.FC<Props> = ({ navigation }) => {
         {/* Próxima Viagem Destacada */}
         {proximaViagem && (
           <View
-            style={styles.proximaViagemCard}
+            style={[
+              styles.proximaViagemCard,
+              todayBannerConfig ? styles.proximaViagemCardBelowBanner : null,
+            ]}
             accessible
             accessibilityLabel={`Próxima viagem às ${proximaViagem.horario}, status ${proximaViagem.status}`}>
             <View style={styles.cardHeader}>
@@ -739,6 +742,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary.lighter,
     borderRadius: borderRadius.xl,
     ...shadows.lg,
+  },
+  proximaViagemCardBelowBanner: {
+    marginTop: spacing.base,
   },
   cardHeader: {
     flexDirection: 'row',

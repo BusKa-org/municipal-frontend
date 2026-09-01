@@ -121,14 +121,22 @@ const LocalizacaoOnibus: React.FC<Props> = ({ navigation, route }) => {
 
   const obterMinhaPosicao = useCallback(() => {
     if (!Geolocation || !localizacaoPermitida.current) return;
+    const guardar = (pos: { coords: { latitude: number; longitude: number } }) => {
+      setPosicaoAluno({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      });
+    };
     Geolocation.getCurrentPosition(
-      (pos) => {
-        setPosicaoAluno({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        });
-      },
-      () => {},
+      guardar,
+      // Alta precisão depende do GPS, que não fixa dentro de prédio. A rede
+      // responde nesse caso, com precisão menor.
+      () =>
+        Geolocation!.getCurrentPosition(guardar, () => {}, {
+          enableHighAccuracy: false,
+          timeout: 15_000,
+          maximumAge: 60_000,
+        }),
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 5_000 },
     );
   }, []);
