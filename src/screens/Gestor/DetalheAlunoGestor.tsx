@@ -29,9 +29,11 @@ const DetalheAlunoGestor = ({ route, navigation }: any) => {
     [alunoId],
   );
 
+  // 2º argumento é a lista de dependências — passar `alunoId` também garante
+  // recarregar ao abrir outro aluno sem desmontar a tela.
   const { data: aluno, isLoading, isError, error, refetch } = useFetch<AlunoResponse>(
     fetchAluno,
-    null,
+    [alunoId],
     { showErrorToast: true },
   );
 

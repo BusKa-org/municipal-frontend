@@ -204,6 +204,11 @@ export function useFetch(fetchFn, deps = [], options = {}) {
   const api = useApi(apiOptions);
   const hasLoadedRef = useRef(false);
 
+  // O default `= []` só cobre `undefined`. Quem passa `null` (por exemplo,
+  // confundindo o 2º argumento com um valor inicial) fazia o spread abaixo
+  // estourar e derrubar a tela inteira no ErrorBoundary.
+  const depList = Array.isArray(deps) ? deps : [];
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -213,7 +218,7 @@ export function useFetch(fetchFn, deps = [], options = {}) {
     };
 
     load();
-  }, [enabled, ...deps]);
+  }, [enabled, ...depList]);
 
   return {
     ...api,
