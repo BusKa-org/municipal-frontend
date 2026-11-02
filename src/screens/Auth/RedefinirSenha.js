@@ -36,12 +36,33 @@ const readToken = (route) => {
   return '';
 };
 
-// The backend reports a bad token as a 400 whose message mentions the link or token.
+// A details entry is a string or a Marshmallow list of strings.
+const detailFor = (err, field) => {
+  const value = err?.details?.[field];
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return value;
+};
+
+// Uses the raw backend text: errorParser rewrites "token ... inválido" into a session message.
+// Backend: "Link inválido ou expirado", "Link expirado. Solicite...", "Link inválido", "Token é obrigatório".
 const isInvalidLinkError = (err) => {
-  if (err?.field === 'token') {
+  if (detailFor(err, 'token')) {
     return true;
   }
-  return /link|token/i.test(err?.message || '');
+  const raw = err?.backendMessage || '';
+  return raw.startsWith('Link ') || raw === 'Token é obrigatório';
+};
+
+// Shows the backend's own text (e.g. the minimum password length) instead of the generic rewrite.
+const resetErrorMessage = (err) => {
+  return (
+    detailFor(err, 'new_password') ||
+    err?.backendMessage ||
+    err?.message ||
+    'Não foi possível redefinir a senha. Tente novamente.'
+  );
 };
 
 const RedefinirSenha = ({navigation, route}) => {
@@ -65,11 +86,13 @@ const RedefinirSenha = ({navigation, route}) => {
   }, [cardOpacity, cardTranslateY]);
 
   // Drop the token from the address bar so a reload does not reopen this screen.
+  // The popstate event tells MainNavigator the path changed (a logged-in user goes back home).
   const sairPara = (routeName) => {
+    navigation.navigate(routeName);
     if (isWeb && typeof window !== 'undefined') {
       window.history.replaceState(null, '', '/');
+      window.dispatchEvent(new window.PopStateEvent('popstate'));
     }
-    navigation.navigate(routeName);
   };
 
   const handleRedefinirSenha = async () => {
@@ -95,7 +118,7 @@ const RedefinirSenha = ({navigation, route}) => {
       if (isInvalidLinkError(err)) {
         setLinkInvalido(true);
       } else {
-        setError(err?.message || 'Não foi possível redefinir a senha. Tente novamente.');
+        setError(resetErrorMessage(err));
       }
     } finally {
       setLoading(false);
@@ -114,10 +137,10 @@ const RedefinirSenha = ({navigation, route}) => {
           resizeMode="cover"
         />
 
-        <View style={[styles.successCard, {marginTop: CARD_TOP}]}>
-          <View style={styles.successContent}>
-            <Text style={styles.successTitle}>Link inválido ou expirado</Text>
-            <Text style={styles.successHint}>
+        <View style={[styles.messageCard, {marginTop: CARD_TOP}]}>
+          <View style={styles.messageContent}>
+            <Text style={styles.messageTitle}>Link inválido ou expirado</Text>
+            <Text style={styles.messageHint}>
               Este link de redefinição não é mais válido. Solicite um novo link para criar sua senha.
             </Text>
           </View>
@@ -444,8 +467,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // ── Success card ──────────────────────────────────
-  successCard: {
+  // ── Message card ──────────────────────────────────
+  messageCard: {
     flex: 1,
     backgroundColor: colors.background.paper,
     borderTopLeftRadius: 28,
@@ -457,12 +480,12 @@ const styles = StyleSheet.create({
     ...shadows.xl,
   },
 
-  successContent: {
+  messageContent: {
     alignItems: 'center',
     paddingTop: spacing.lg,
   },
 
-  successTitle: {
+  messageTitle: {
     fontFamily: 'Inter-Bold',
     fontSize: 22,
     fontWeight: '700',
@@ -471,15 +494,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
   },
 
-  successBody: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 15,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-
-  successHint: {
+  messageHint: {
     fontFamily: 'Inter-Regular',
     fontSize: 13,
     color: colors.text.disabled,
