@@ -37,7 +37,7 @@ const backendErrorPatterns = [
   
   // Password errors
   { pattern: /senha.*(incorreta|errada|wrong|invalid|inválida)/i, code: ErrorCode.INVALID_PASSWORD, field: 'password', message: 'Senha incorreta.' },
-  { pattern: /senha.*(fraca|weak|curta|short)/i, code: ErrorCode.PASSWORD_TOO_WEAK, field: 'password', message: 'Senha muito fraca. Use pelo menos 6 caracteres.' },
+  { pattern: /senha.*(fraca|weak|curta|short)/i, code: ErrorCode.PASSWORD_TOO_WEAK, field: 'password', message: 'Senha muito fraca. Use pelo menos 8 caracteres.' },
   { pattern: /password.*(incorrect|wrong|invalid)/i, code: ErrorCode.INVALID_PASSWORD, field: 'password', message: 'Senha incorreta.' },
   
   // Auth errors
@@ -320,6 +320,8 @@ export function parseApiError(error) {
     const message = errorMessage || 'Dados inválidos. Verifique as informações.';
     const validationError = new ValidationError(message, errorField, details);
     validationError.fieldErrors = fieldErrors;
+    // Keep the backend text: the friendly rewrite above can hide what the backend meant.
+    validationError.backendMessage = backendMessage;
     return validationError;
   }
   
