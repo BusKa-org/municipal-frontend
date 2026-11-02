@@ -77,7 +77,9 @@ projeto1/
 ## Scripts Disponíveis
 
 - `npm run web` - Executa o app no navegador (porta 3000)
-- `npm run build:web` - Gera build de produção para web
+- `npm run build:web` - Gera build de produção para web (em `dist/`)
 - `npm start` - Inicia o Metro Bundler (para mobile)
 - `npm run android` - Executa no Android
 - `npm run ios` - Executa no iOS
+
+> **Hospedagem web:** o servidor que servir o `dist/` precisa devolver o `index.html` para qualquer caminho que não seja um arquivo (fallback de SPA). Sem isso, o link do e-mail de redefinição de senha (`/redefinir-senha?token=...`) dá 404. No nginx: `try_files $uri /index.html;`. Em dev o `historyApiFallback` do webpack já faz isso.

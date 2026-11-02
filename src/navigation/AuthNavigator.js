@@ -3,6 +3,7 @@ import {Platform} from 'react-native';
 import Login from '../screens/Auth/Login';
 import CriarConta from '../screens/Auth/CriarConta';
 import RecuperarSenha from '../screens/Auth/RecuperarSenha';
+import RedefinirSenha from '../screens/Auth/RedefinirSenha';
 import ConsentimentoResponsavel from '../screens/Auth/ConsentimentoResponsavel';
 import {
   NavigationProvider,
@@ -27,15 +28,24 @@ if (!isWeb) {
   }
 }
 
+// The web build has no URL routing; the reset e-mail link is the only path that opens a screen other than Login.
+const getWebInitialRoute = () => {
+  if (window.location.pathname === '/redefinir-senha') {
+    return 'RedefinirSenha';
+  }
+  return 'Login';
+};
+
 const AuthNavigator = () => {
   // Se estiver na web ou React Navigation não estiver disponível, usa navegação simples
   if (isWeb || !createNativeStackNavigator) {
     return (
-      <NavigationProvider initialRoute="Login">
+      <NavigationProvider initialRoute={isWeb ? getWebInitialRoute() : 'Login'}>
         <Navigator>
           <Screen name="Login" component={Login} />
           <Screen name="CriarConta" component={CriarConta} />
           <Screen name="RecuperarSenha" component={RecuperarSenha} />
+          <Screen name="RedefinirSenha" component={RedefinirSenha} />
           <Screen name="ConsentimentoResponsavel" component={ConsentimentoResponsavel} />
         </Navigator>
       </NavigationProvider>
@@ -59,6 +69,7 @@ const AuthNavigator = () => {
       <Stack.Screen name="Login" component={Login} />
       <Stack.Screen name="CriarConta" component={CriarConta} />
       <Stack.Screen name="RecuperarSenha" component={RecuperarSenha} />
+      <Stack.Screen name="RedefinirSenha" component={RedefinirSenha} />
       <Stack.Screen name="ConsentimentoResponsavel" component={ConsentimentoResponsavel} />
     </Stack.Navigator>
   );

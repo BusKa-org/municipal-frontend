@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {Platform, View, ActivityIndicator, StyleSheet} from 'react-native';
 import AlunoNavigator from './AlunoNavigator';
 import MotoristaNavigator from './MotoristaNavigator';
@@ -44,6 +44,17 @@ const getInitialRoute = (role) => {
 
 const MainNavigator = () => {
   const { isAuthenticated, user, loading } = useAuth();
+  const [webPath, setWebPath] = useState(isWeb ? window.location.pathname : '');
+
+  // RedefinirSenha fires popstate when it clears the reset link from the URL.
+  useEffect(() => {
+    if (!isWeb) {
+      return undefined;
+    }
+    const onPathChange = () => setWebPath(window.location.pathname);
+    window.addEventListener('popstate', onPathChange);
+    return () => window.removeEventListener('popstate', onPathChange);
+  }, []);
 
   // Show loading screen while checking auth status
   if (loading) {
@@ -54,8 +65,8 @@ const MainNavigator = () => {
     );
   }
 
-  // If not authenticated, show auth screens
-  if (!isAuthenticated) {
+  // Auth screens when logged out, and also for the reset e-mail link even when logged in
+  if (!isAuthenticated || webPath === '/redefinir-senha') {
     return <AuthNavigator />;
   }
 
